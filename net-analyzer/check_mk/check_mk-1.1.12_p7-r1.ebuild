@@ -170,7 +170,7 @@ src_install() {
 
 		insinto /etc/apache2/modules.d
 		insopts -m0644
-			newins ${FILESDIR}/apache2.conf 99_check_mk.conf
+			newins ${FILESDIR}/apache2.conf.${PV} 99_check_mk.conf
 		
 		insinto /usr/share/check_mk/web/htdocs
 		insopts -m0644
