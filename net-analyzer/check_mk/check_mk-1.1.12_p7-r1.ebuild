@@ -141,7 +141,7 @@ src_install() {
 		
 		insinto /usr/share/check_mk/modules
 		insopts -m0644
-			doins ${FILESDIR}/defaults.${PV} defaults
+			newins ${FILESDIR}/defaults.${PV} defaults || die
 	
 		dodir /var/lib/check_mk/autochecks
 		
@@ -174,7 +174,7 @@ src_install() {
 		
 		insinto /usr/share/check_mk/web/htdocs
 		insopts -m0644
-			newins ${FILESDIR}/defaults.${PV} defaults.py
+			newins ${FILESDIR}/defaults.${PV} defaults.py || die
 
 		dodir /var/lib/check_mk/web
 			fowners apache:nagios /var/lib/check_mk/web
