@@ -11,8 +11,8 @@ HOMEPAGE="http://mathias-kettner.de/check_mk_download.html"
 
 EGIT_REPO_URI="http://git.mathias-kettner.de/check_mk.git"
 EGIT_PROJECT="check_mk"
-EGIT_BRANCH="master"
-EGIT_COMMIT="v1.2.0p2"
+EGIT_BRANCH="1.1.12"
+EGIT_COMMIT="v1.1.12p7"
 
 SRC_URI=""
 
@@ -24,13 +24,11 @@ doc
 cache
 server
 web
-web_admin
 xinetd
 "
 
 REQUIRED_USE="
 web? ( server )
-web_admin? ( web )
 "
 
 DEPEND="
@@ -53,11 +51,11 @@ src_prepare() {
 	if use server; then
 		echo -e "#!/bin/sh\nexec python /usr/share/check_mk/modules/check_mk.py "'"$@"' > ${T}/check_mk
 
-		sed -i "s/@BINDIR@/\/usr\/bin/g" ${S}/check_mk_templates.cfg || die
-		sed -i "s/@VARDIR@/\/var\/lib\/check_mk/g" ${S}/check_mk_templates.cfg || die
-		sed -i "s/@CHECK_ICMP@/\/usr\/lib\/nagios\/plugins\/check_icmp/g" ${S}/check_mk_templates.cfg || die
-		sed -i "s/@CGIURL@/\/nagios\/cgi-bin\//g" ${S}/check_mk_templates.cfg || die
-		sed -i "s/@PNPURL@/\/pnp4nagios\//g" ${S}/check_mk_templates.cfg || die
+		sed -i "s/@BINDIR@/\/usr\/bin/g" ${S}/doc/check_mk_templates.cfg
+		sed -i "s/@VARDIR@/\/var\/lib\/check_mk/g" ${S}/doc/check_mk_templates.cfg
+		sed -i "s/@CHECK_ICMP@/\/usr\/lib\/nagios\/plugins\/check_icmp/g" ${S}/doc/check_mk_templates.cfg
+		sed -i "s/@CGIURL@/\/nagios\/cgi-bin\//g" ${S}/doc/check_mk_templates.cfg
+		sed -i "s/@PNPURL@/\/pnp4nagios\//g" ${S}/doc/check_mk_templates.cfg
 	else
 		return
 	fi
@@ -92,61 +90,50 @@ src_compile() {
 src_install() {
 	insinto /usr/bin
 	insopts -m0755
-		newins ${S}/agents/check_mk_agent.linux check_mk_agent || die
+		newins ${S}/agents/check_mk_agent.linux check_mk_agent
 		if use cache; then
-			newins ${S}/agents/check_mk_caching_agent.linux check_mk_caching_agent || die
+			newins ${S}/agents/check_mk_caching_agent.linux check_mk_caching_agent
 		fi
 	
 	if use xinetd; then
 		insinto /etc/xinetd.d
 		insopts -m0644
 			if use cache; then
-				newins ${S}/agents/xinetd_caching.conf check_mk_agent || die
+				newins ${S}/agents/xinetd_caching.conf check_mk_agent
 			else
-				newins ${S}/agents/xinetd.conf check_mk_agent || die
+				newins ${S}/agents/xinetd.conf check_mk_agent
 			fi
 	fi
 
 	if use server; then
 		insinto /etc/check_mk
 		insopts -m0644
-			doins ${S}/main.mk || die
-			doins ${S}/multisite.mk || die
-
+			doins ${S}/main.mk
+			doins ${S}/multisite.mk
 		dodir /etc/check_mk/conf.d
-		dodir /etc/check_mk/conf.d/wato
-			fowners nagios:nagios /etc/check_mk/conf.d/wato
-		touch ${D}/etc/check_mk/conf.d/distributed_wato.mk
-			fowners nagios:nagios /etc/check_mk/conf.d/distributed_wato.mk
-
 		dodir /etc/check_mk/multisite.d
-		dodir /etc/check_mk/multisite.d/wato
-			fowners nagios:nagios /etc/check_mk/multisite.d/wato
-		touch ${D}/etc/check_mk/multisite.d/sites.mk
-			fowners nagios:nagios /etc/check_mk/multisite.d/sites.mk
-
 
 		insinto /etc/nagios/check_mk.d/
 		insopts -m0644
-			doins ${S}/check_mk_templates.cfg || die
+			doins ${S}/doc/check_mk_templates.cfg
 	
 		insinto /usr/bin
 			insopts -m0755
-			doins ${S}/livestatus/src/unixcat || die
-			doins ${T}/check_mk || die
+			doins ${S}/livestatus/src/unixcat
+			doins ${T}/check_mk
 		
 		insinto /usr/lib/check_mk
 			insopts -m0644
-			doins ${S}/livestatus/src/livecheck || die
-			doins ${S}/livestatus/src/livestatus.o || die
+			doins ${S}/livestatus/src/livestatus.o
 
 		insinto /usr/share/check_mk
 		insopts -m0644
-			doins -r ${S}/agents || die
-			doins -r ${S}/checks || die
-			doins -r ${S}/modules || die
-			doins -r ${S}/pnp-templates || die
-			doins -r ${S}/web || die
+			doins -r ${S}/agents
+			doins -r ${S}/checks
+			doins -r ${S}/modules
+			doins -r ${S}/pnp-templates
+			doins -r ${S}/pnp-rraconf
+			doins -r ${S}/web
 		
 		dodir /usr/share/check_mk/locale
 		
@@ -168,39 +155,34 @@ src_install() {
 		dodir /var/lib/check_mk/precompiled
 			fowners nagios:nagios /var/lib/check_mk/precompiled
 		
-		dodir /var/lib/check_mk/tmp
-			fowners nagios:nagios /var/lib/check_mk/tmp
-		
 		dodir /var/lib/check_mk/wato
 			fowners nagios:nagios /var/lib/check_mk/wato
-	fi
 
-	if use web; then
-		if use web_admin; then
+		if use web; then
 			insinto /etc/sudoers.d
 			insopts -m0440
-				doins ${FILESDIR}/sudoers check_mk || die
-		fi
+				newins ${FILESDIR}/sudoers.${PV} check_mk
 
-		insinto /etc/apache2/modules.d
-		insopts -m0644
-			newins ${FILESDIR}/apache2.conf.${PV} 99_check_mk.conf || die
+			insinto /etc/apache2/modules.d
+			insopts -m0644
+				newins ${FILESDIR}/apache2.conf.${PV} 99_check_mk.conf
 		
-		insinto /usr/share/check_mk/web/htdocs
-		insopts -m0644
-			newins ${FILESDIR}/defaults.${PV} defaults.py || die
+			insinto /usr/share/check_mk/web/htdocs
+			insopts -m0644
+				newins ${FILESDIR}/defaults.${PV} defaults.py || die
 
-		dodir /var/lib/check_mk/web
-			fowners apache:nagios /var/lib/check_mk/web
+			dodir /var/lib/check_mk/web
+				fowners apache:nagios /var/lib/check_mk/web
+		fi
 	fi
 
 	if use doc; then
 		insinto /usr/share/doc/check_mk
 		insopts -m0644
-			doins -r ${S}/doc/* || die
+			doins -r ${S}/doc/*
 
 		insinto /usr/share/doc/check_mk/checks
 		insopts -m0644
-			doins ${S}/checkman/* || die
+			doins ${S}/checkman/*
 	fi
 }
