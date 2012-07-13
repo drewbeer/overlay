@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+<maintainer>
+  <email>sebastian@trebitz.eu</email>
+</maintainer>
+<use>
+  <flag name='cache'>Install check_mk_caching_agent wrapper</flag>
+  <flag name='server'>Install parts of check_mk used on the nagios server</flag>
+  <flag name='web'>Install the web frontend</flag>
+</use>
+</pkgmetadata>
