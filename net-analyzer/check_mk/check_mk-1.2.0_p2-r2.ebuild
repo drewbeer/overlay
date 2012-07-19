@@ -20,9 +20,23 @@ LICENSE="GPLv2"
 SLOT="0"
 KEYWORDS="amd64"
 IUSE="
+dmi_sysinfo
+dmraid
 doc
 cache
+j4p_performance
+mk_logwatch
+mk_mysql
+mk_oracle
+mk_postgres
+mk_tsm
+nfsexports
 server
+smart
+sylo
+vxvm_enclosures
+vxvm_multipath
+vxvm_objstatus
 web
 xinetd
 "
@@ -37,6 +51,7 @@ server? ( sys-devel/automake )
 
 RDEPEND="
 server? ( net-analyzer/nagios net-analyzer/pnp4nagios )
+smart? ( sys-apps/smartmontools )
 web? ( www-apache/mod_python )
 xinetd? ( sys-apps/xinetd )
 "
@@ -88,13 +103,31 @@ src_compile() {
 
 
 src_install() {
-	insinto /usr/bin
 	insopts -m0755
-		newins ${S}/agents/check_mk_agent.linux check_mk_agent || die
+		newbin ${S}/agents/check_mk_agent.linux check_mk_agent || die
+		dodir /usr/lib/check_mk_agent/local
+		dodir /usr/lib/check_mk_agent/plugins
+
 		if use cache; then
-			newins ${S}/agents/check_mk_caching_agent.linux check_mk_caching_agent || die
+			newbin ${S}/agents/check_mk_caching_agent.linux check_mk_caching_agent || die
 		fi
-	
+
+	exeinto /usr/lib/check_mk_agent/plugins
+		if use dmi_sysinfo; then doexe ${S}/agents/plugins/dmi_sysinfo || die; fi
+		if use dmraid; then doexe ${S}/agents/plugins/dmraid || die; fi
+		if use j4p_performance; then doexe ${S}/agents/plugins/j4p_performance || die; fi
+		if use mk_logwatch; then doexe ${S}/agents/plugins/mk_logwatch || die; fi
+		if use mk_mysql; then doexe ${S}/agents/plugins/mk_mysql || die; fi
+		if use mk_oracle; then doexe ${S}/agents/plugins/mk_oracle || die; fi
+		if use mk_postgres; then doexe ${S}/agents/plugins/mk_postgres || die; fi
+		if use mk_tsm; then doexe ${S}/agents/plugins/mk_tsm || die; fi
+		if use nfsexports; then doexe ${S}/agents/plugins/nfsexports || die; fi
+		if use smart; then doexe ${S}/agents/plugins/smart || die; fi
+		if use sylo; then doexe ${S}/agents/plugins/sylo || die; fi
+		if use vxvm_enclosures; then doexe ${S}/agents/plugins/vxvm_enclosures || die; fi
+		if use vxvm_multipath; then doexe ${S}/agents/plugins/vxvm_multipath || die; fi
+		if use vxvm_objstatus; then doexe ${S}/agents/plugins/vxvm_objstatus || die; fi
+
 	if use xinetd; then
 		insinto /etc/xinetd.d
 		insopts -m0644
@@ -131,16 +164,21 @@ src_install() {
 		insinto /usr/share/check_mk
 		insopts -m0644
 			doins -r ${S}/agents || die
-			doins -r ${S}/checks || die
-			doins -r ${S}/modules || die
 			doins -r ${S}/pnp-templates || die
 			doins -r ${S}/web || die
 		
+		exeinto /usr/share/check_mk/checks
+			for check in $(find ${S}/checks -type f); do
+				doexe ${check} || die
+			done
+
+		exeinto /usr/share/check_mk/modules
+			for module in $(find ${S}/modules -type f); do
+				doexe ${module} || die
+			done
+			newexe ${FILESDIR}/defaults.${PV} defaults || die
+
 		dodir /usr/share/check_mk/locale
-		
-		insinto /usr/share/check_mk/modules
-		insopts -m0644
-			newins ${FILESDIR}/defaults.${PV} defaults || die
 	
 		dodir /var/lib/check_mk/autochecks
 		
