@@ -50,6 +50,8 @@ server? ( sys-devel/automake )
 "
 
 RDEPEND="
+dmi_sysinfo? ( sys-apps/dmidecode )
+dmraid? ( sys-fs/dmraid )
 server? ( net-analyzer/nagios net-analyzer/pnp4nagios )
 smart? ( sys-apps/smartmontools )
 web? ( www-apache/mod_python )
