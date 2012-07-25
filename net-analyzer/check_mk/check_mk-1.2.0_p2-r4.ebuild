@@ -50,6 +50,7 @@ server? ( sys-devel/automake )
 "
 
 RDEPEND="
+sys-apps/ethtool
 dmi_sysinfo? ( sys-apps/dmidecode )
 dmraid? ( sys-fs/dmraid )
 server? ( net-analyzer/nagios net-analyzer/pnp4nagios )
