@@ -4,15 +4,14 @@
 
 EAPI="4"
 
-inherit eutils autotools git-2
+inherit eutils autotools git-2 versionator
 
 DESCRIPTION="check_mk, a new general purpose Nagios-plugin for retrieving data"
 HOMEPAGE="http://mathias-kettner.de/check_mk_download.html"
 
 EGIT_REPO_URI="http://git.mathias-kettner.de/check_mk.git"
 EGIT_PROJECT="check_mk"
-EGIT_BRANCH="master"
-EGIT_COMMIT="v1.2.0p2"
+EGIT_COMMIT="v$(delete_version_separator 3)"
 
 SRC_URI=""
 
@@ -74,6 +73,13 @@ src_prepare() {
 		sed -i "s/@CHECK_ICMP@/\/usr\/lib\/nagios\/plugins\/check_icmp/g" ${S}/check_mk_templates.cfg || die
 		sed -i "s/@CGIURL@/\/nagios\/cgi-bin\//g" ${S}/check_mk_templates.cfg || die
 		sed -i "s/@PNPURL@/\/pnp4nagios\//g" ${S}/check_mk_templates.cfg || die
+
+		pushd ${S}/livestatus/
+			eaclocal
+			eautoheader
+			eautomake -a
+			eautoconf
+		popd
 	else
 		return
 	fi
@@ -82,10 +88,6 @@ src_prepare() {
 src_configure() {
 	if use server; then
 		pushd ${S}/livestatus/
-			eaclocal
-			eautoheader
-			eautomake -a
-			eautoconf
 			econf --libdir=/usr/lib/check_mk --bindir=/usr/bin
 			sed -i "s#/usr/local/nagios/var/rw/live#/var/nagios/rw/live#g" ./src/livestatus.h
 		popd
@@ -95,9 +97,13 @@ src_configure() {
 }
 
 src_compile() {
+	pushd ${S}/agents
+		emake || die
+	popd
+
 	if use server; then
 		pushd ${S}/livestatus
-			emake
+			emake || die
 		popd
 	else 
 		return
@@ -108,6 +114,7 @@ src_compile() {
 src_install() {
 	insopts -m0755
 		newbin ${S}/agents/check_mk_agent.linux check_mk_agent || die
+		dobin ${S}/agents/waitmax || die
 		dodir /usr/lib/check_mk_agent/local
 		dodir /usr/lib/check_mk_agent/plugins
 
