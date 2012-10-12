@@ -186,7 +186,7 @@ src_install() {
 			for module in $(find ${S}/modules -type f); do
 				doexe ${module} || die
 			done
-			newexe ${FILESDIR}/defaults.${PV} defaults || die
+			newexe ${FILESDIR}/defaults.$(get_version_component_range 1-3) defaults || die
 
 		dodir /usr/share/check_mk/locale
 	
@@ -213,7 +213,7 @@ src_install() {
 		if use web; then
 			insinto /etc/apache2/modules.d
 			insopts -m0644
-				newins ${FILESDIR}/apache2.conf.${PV} 99_check_mk.conf || die
+				newins ${FILESDIR}/apache2.conf.$(get_version_component_range 1-3) 99_check_mk.conf || die
 			
 			dodir /etc/check_mk/conf.d/wato
 				fowners nagios:nagios /etc/check_mk/conf.d/wato
@@ -233,11 +233,11 @@ src_install() {
 
 			insinto /etc/sudoers.d
 			insopts -m0440
-				newins ${FILESDIR}/sudoers.${PV} check_mk || die
+				newins ${FILESDIR}/sudoers.$(get_version_component_range 1-3) check_mk || die
 
 			insinto /usr/share/check_mk/web/htdocs
 			insopts -m0644
-				newins ${FILESDIR}/defaults.${PV} defaults.py || die
+				newins ${FILESDIR}/defaults.$(get_version_component_range 1-3) defaults.py || die
 
 			dodir /var/lib/check_mk/web
 				fowners apache:nagios /var/lib/check_mk/web
