@@ -34,4 +34,5 @@ src_install() {
 	emake DESTDIR="${D}" install || die
 	dodoc AUTHORS ChangeLog NEWS README doc/* || die
 	find "${D}" -name '*.la' -delete || die
+	ln -s /usr/lib/security/pam_yubico.so /lib64/security/pam_yubico.so
 }
