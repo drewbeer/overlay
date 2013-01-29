@@ -1,0 +1,22 @@
+# Replacement for /etc/pam.d/sshd
+#
+# Enabled this option to to enable your yubikey to be considered authorized
+##auth sufficient pam_yubico.so id=10171 key=dLnZBnltFF/pp4l3J8TX6AaRg8A= authfile=/etc/yubikey_mappings debug use_first_pass
+
+## Default gentoo configs
+auth       include     system-remote-login
+account    include     system-remote-login
+password   include     system-remote-login
+session    include     system-remote-login
+
+#####
+#
+# Two factor example, with this config it will ask
+# for your yubikey otp, and your password
+# you must comment out ALL the lines above.
+#
+#auth required pam_yubico.so id=10171 key=dLnZBnltFF/pp4l3J8TX6AaRg8A= debug
+#auth required pam_unix.so try_first_pass
+#account    required   pam_unix.so debug
+#password   required   pam_unix.so
+#session    required   pam_unix.so debug
