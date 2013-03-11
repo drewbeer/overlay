@@ -1,0 +1,24 @@
+# ChangeLog for virtual/mysql
+# Copyright 1999-2013 Gentoo Foundation; Distributed under the GPL v2
+# $Header: $
+
+  04 Mar 2013; Robin H. Johnson <robbat2@gentoo.org> -Manifest,
+  mysql-5.2.ebuild, mysql-5.3.ebuild:
+  Update headers and keywords.
+
+  29 Jul 2011; Jorge Manuel B. S. Vicetto <jmbsvicetto@gentoo.org>
+  mysql-5.2.ebuild:
+  [virtual/mysql-5.2] Adjust keywords for the virtual.
+
+  08 Jan 2011; Robin H. Johnson <robbat2@gentoo.org> mysql-5.0.ebuild,
+  mysql-5.1.ebuild:
+  mysql-community is long gone, removal time.
+
+*mysql-5.5 (04 Sep 2010)
+*mysql-5.4 (04 Sep 2010)
+*mysql-5.1 (04 Sep 2010)
+*mysql-5.0 (04 Sep 2010)
+
+  04 Sep 2010; Robin H. Johnson <robbat2@gentoo.org> +mysql-5.0.ebuild,
+  +mysql-5.1.ebuild, +mysql-5.4.ebuild, +mysql-5.5.ebuild, +metadata.xml:
+  Add in virtual in overlay for cluster.
