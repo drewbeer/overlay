@@ -1,0 +1,58 @@
+# ChangeLog for app-admin/graylog2
+# Copyright 1999-2012 Gentoo Foundation; Distributed under the GPL v2
+# $Header: $
+
+*graylog2-0.9.6 (28 Aug 2012)
+
+  28 Aug 2012; Dean Matzkov <bapabooiee@gmail.com> +graylog2-0.9.6.ebuild,
+  +files/graylog2-0.9.6.initd, -files/graylog2.initd-r1,
+  -graylog2-0.9.4_p1.ebuild, +files/graylog2-0.9.6.confd:
+  Version bump. Changes include installing a conf.d file and adding a
+  post-install message that informs users about Graylog2 moving to
+  ElasticSearch.
+
+  10 Feb 2011; Dean Matzkov <bapabooiee@gmail.com> -files/graylog2.confd,
+  -graylog2-0.9.3.ebuild, -graylog2-0.9.3-r1.ebuild, -graylog2-0.9.4.ebuild,
+  graylog2-0.9.4_p1.ebuild, -files/graylog2.initd, graylog2-0.9.4_p1-r1.ebuild:
+  Removed old ebuilds+files, and did some minor cleanup.
+
+  24 Jan 2011; Dean Matzkov (bapa) <bapabooiee@gmail.com> +metadata.xml,
+  +files/graylog2.initd-r2, +graylog2-0.9.4_p1-r1.ebuild:
+  Tweaked the description and post-install message; created a `local-mongodb'
+  USE flag to signify a local MongoDB installation is intended; polished-up the
+  init script; changed configuration file's default permissions.
+
+*graylog2-0.9.4_p1 (16 Jan 2011)
+
+  16 Jan 2011; Dean Matzkov <bapabooiee@gmail.com> graylog2-0.9.4.ebuild,
+  +graylog2-0.9.4_p1.ebuild:
+  Version bump
+
+*graylog2-0.9.4 (15 Jan 2011)
+
+  15 Jan 2011; Dean Matzkov <bapabooiee@gmail.com> graylog2-0.9.3.ebuild,
+  graylog2-0.9.3-r1.ebuild, +graylog2-0.9.4.ebuild:
+  Version bump, and fixed download URI in all ebuilds.
+
+*graylog2-0.9.3-r1 (15 Jan 2011)
+
+  15 Jan 2011; Dean Matzkov <bapabooiee@gmail.com> files/graylog2.initd,
+  -graylog2-0.9.1.ebuild, -graylog2-0.9.2.ebuild, +graylog2-0.9.3-r1.ebuild,
+  +files/graylog2.initd-r1:
+  Removed older versions, and revised ebuild. Changes include:
+
+  * Removing dependency on MongoDB, because the server won't always be local.
+  * Revised /etc/init.d/graylog2.
+  * Removed need for /etc/conf.d/graylog2 file.
+
+*graylog2-0.9.3 (24 Dec 2010)
+
+  24 Dec 2010; Dean Matzkov <bapabooiee@gmail.com> +graylog2-0.9.3.ebuild:
+  Version bump
+
+*graylog2-0.9.2 (15 Oct 2010)
+
+  15 Oct 2010; Dean Matzkov (bapa) <bapabooiee@gmail.com>
+  +graylog2-0.9.2.ebuild:
+  Version bump
+
