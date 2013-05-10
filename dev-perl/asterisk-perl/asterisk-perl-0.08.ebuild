@@ -19,11 +19,11 @@ mydoc="README CHANGES examples/*"
 
 pkg_setup() {
 	einfo "Checking your perl installation..."
-	if built_with_use "dev-lang/perl" minimal; then
-		eerror "Your perl was built with the 'minimal' USE flag."
-		eerror "asterisk-perl will not build in these conditions."
-		eerror "Re-emerge dev-lang/perl with the 'minimal' flag unset."
-		die "perl with 'minimal' use flag found"
-	fi
+#	if built_with_use "dev-lang/perl" minimal; then
+#		eerror "Your perl was built with the 'minimal' USE flag."
+#		eerror "asterisk-perl will not build in these conditions."
+#		eerror "Re-emerge dev-lang/perl with the 'minimal' flag unset."
+#		#die "perl with 'minimal' use flag found"
+#	fi
 	einfo "Everything is fine, continuing..."
 }
