@@ -13,8 +13,7 @@ SLOT="0"
 KEYWORDS="~ppc x86"
 IUSE=""
 
-DEPEND="net-misc/asterisk
-	dev-lang/perl"
+DEPEND="dev-lang/perl"
 
 mydoc="README CHANGES examples/*"
 
