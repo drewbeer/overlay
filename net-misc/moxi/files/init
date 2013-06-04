@@ -1,0 +1,83 @@
+#!/sbin/runscript
+CONF="${SVCNAME#*.}"
+CONFBASE="/etc/conf.d/moxi"
+
+[ -z "${PIDBASE}" ] && PIDBASE="/var/run/moxi/moxi"
+[ "${CONF}" == "moxi" ] && CONF=''
+
+if [ -n "${CONF}" ]; then
+        PIDFILE="${PIDBASE}-${PORT}.${CONF}.pid"
+        CONFSRC="${CONFBASE}.${CONF}"
+        if [ -f "${CONFSRC}" ]; then
+         source "${CONFSRC}"
+        else
+         eerror "The configuration file $CONFSRC was not found!"
+        fi
+else
+        PIDFILE="${PIDBASE}-${PORT}.pid"
+        CONFSRC="${CONFBASE}"
+fi
+
+depend() {
+        need net
+}
+
+checkconfig() {
+        if [ -z "${LISTENON}" ]; then
+          ewarn "You should edit $CONFSRC and specify an address to listen on."
+          ewarn "Listening on any address (check your firewall!)"
+        fi
+
+}
+
+start() {
+        if [ -n "${CONF}" ]; then
+                ebegin "Starting moxi (${CONF})"
+        else
+                ebegin "Starting moxi"
+        fi
+        checkconfig
+        local dir="$(dirname ${PIDFILE})"
+        if [ ! -d "${dir}" ]; then
+          einfo " Creating ${dir}"
+          mkdir -p "${dir}"
+        fi
+        chown ${MOXI_RUNAS} "${dir}"
+        if [ -f "${PIDFILE}" ]; then
+          einfo "  Removing stale pidfile ${PIDFILE}"
+          rm -f "${PIDFILE}" 1>/dev/null
+        fi
+
+        if [ -z "${LISTENON}" ]; then
+          c_LISTENON=""
+        else
+          c_LISTENON="-l ${LISTENON}"
+        fi
+        if [ -z "${MEMCACHED_SERVERS}" ]; then
+	  c_MEMCACHED_SERVERS=""
+	  c_PORT="-p ${PORT}"
+	  c_UDPPORT="-U ${UDPPORT}"
+	else
+	c_MEMCACHED_SERVERS="-z ${PORT}=${MEMCACHED_SERVERS}"
+	c_PORT="-p ${MPORT}"
+	c_UDPPORT="-U ${MUDPPORT}"
+	fi
+        /sbin/start-stop-daemon --start --pidfile "${PIDFILE}" \
+                --exec "${MOXI_BINARY}" \
+			--startas "${MOXI_BINARY}" -- \
+                -d  ${c_PORT} ${c_UDPPORT} ${c_LISTENON} -m ${MEMUSAGE} \
+                -c ${MAXCONN} -u ${MOXI_RUNAS} "${c_MEMCACHED_SERVERS}" -P "${PIDFILE}" \
+				${MISC_OPTS}
+        eend $?
+}
+
+stop() {
+        if [ -n "${CONF}" ]; then
+                ebegin "Stopping moxi (${CONF})"
+        else
+                ebegin "Stopping moxi"
+        fi
+        start-stop-daemon --stop --quiet --pidfile "${PIDFILE}"
+        rm -f "${PIDFILE}"
+        eend $?
+}
