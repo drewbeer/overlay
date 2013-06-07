@@ -2,26 +2,28 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-EAPI=2
+EAPI="4"
 
 PHP_EXT_NAME="ioncube_loader"
 PHP_EXT_ZENDEXT="yes"
 PHP_EXT_INI="yes"
+DOCS="README.txt LICENSE.txt"
 
-inherit php-ext-source-r2 depend.php
+USE_PHP="php5-3 php5-4 php5-5"
+
+inherit php-ext-source-r2
 
 KEYWORDS="~amd64 ~x86"
 
 MY_P="${PN}"
 MY_ARCH=${ARCH/amd64/x86-64}
 
-SRC_URI="http://downloads2.ioncube.com/loader_downloads/ioncube_loaders_lin_${MY_ARCH}.tar.bz2"
-
 S="${WORKDIR}/ioncube"
-PHP_EXT_S=$S
+PHP_EXT_S=${S}
 
 DESCRIPTION="PHP extension that support for running PHP scripts encoded with ionCube's encoder"
 HOMEPAGE="http://www.ioncube.com/"
+SRC_URI="http://downloads2.ioncube.com/loader_downloads/ioncube_loaders_lin_${MY_ARCH}.tar.bz2"
 LICENSE="${PN}"
 SLOT="0"
 IUSE=""
@@ -38,19 +40,12 @@ pkg_setup() {
     PHP_VER=$(echo ${PHP_VER} | sed -e's#dev-lang/php-\([0-9]*\.[0-9]*\)\..*#\1#')
     QA_TEXTRELS="${EXT_DIR/\//}/${PHP_EXT_NAME}.so"
     QA_EXECSTACK="${EXT_DIR/\//}/${PHP_EXT_NAME}.so"
-
-    php_binary_extension
 }
 
 src_unpack() {
     unpack ${A}
 
-# Detect if we use ZTS and change the file path accordingly
-    if has_zts ; then
-	IONCUBE_SO_FILE="${PHP_EXT_NAME}_lin_${PHP_VER}_ts.so"
-    else
-        IONCUBE_SO_FILE="${PHP_EXT_NAME}_lin_${PHP_VER}.so"
-    fi
+    IONCUBE_SO_FILE="${PHP_EXT_NAME}_lin_${PHP_VER}.so"
     cd ${S}
     mkdir modules
     mv ${IONCUBE_SO_FILE} "modules/${PHP_EXT_NAME}.so"
@@ -62,14 +57,21 @@ src_unpack() {
 }
 
 src_install() {
-    php-ext-source-r2_src_install
+#Get from php-ext-source-r2_src_install
+	local slot
+	for slot in $(php_get_slots); do
+		php_init_slot_env ${slot}
 
-    # Install the binary
-    insinto ${EXT_DIR}
-    doins "${PHP_EXT_NAME}.so" 
+		# Let's put the default module away
+		insinto "${EXT_DIR}"
+		newins "modules/${PHP_EXT_NAME}.so" "${PHP_EXT_NAME}.so" || die "Unable to install extension"
 
-    dodoc-php README.txt
-    dodoc-php LICENSE.txt
+		local doc
+		for doc in ${DOCS} ; do
+			[[ -s ${doc} ]] && dodoc ${doc}
+		done
+	done
+	php-ext-source-r2_createinifiles
 }
 
 pkg_config () {
