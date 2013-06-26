@@ -44,7 +44,6 @@ pkg_setup() {
 
 src_unpack() {
     unpack ${A}
-
     cd ${S}
     mkdir modules
     local slot orig_s="${PHP_EXT_S}"
