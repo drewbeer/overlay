@@ -1,0 +1,37 @@
+# moxi config file
+
+MOXI_BINARY="/usr/bin/moxi"
+
+#Specify memory usage in megabytes (do not use letters)
+#64MB is default
+MEMUSAGE="64"
+
+#User to run as
+MOXI_RUNAS="moxi"
+
+#Specify maximum number of concurrent connections
+#1024 is default
+MAXCONN="1024"
+
+#Listen for connections on what address?
+# If this is empty, memcached will listen on 0.0.0.0
+# be sure you have a firewall in place!
+LISTENON=""
+
+#Listen for connections on what port?
+PORT="11211"
+#Moxi acting as a memcached server port
+MPORT="11212"
+MUDPPORT="11212"
+# Listen for UDP connecitons on what port? 0 means turn off UDP
+UDPPORT="${PORT}"
+#Memcache servers
+#Example:memcached_1:11211,memcached_2:11211
+MEMCACHED_SERVERS=""
+#PID file location
+# '-${PORT}.${CONF}.pid' will be appended to this!
+# You do not normally need to change this.
+PIDBASE="/var/run/moxi/moxi"
+
+#Other Options
+MISC_OPTS=""
