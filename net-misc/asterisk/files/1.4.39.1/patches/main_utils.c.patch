@@ -1,0 +1,25 @@
+--- asterisk-1.4.39.1/main/utils.c	2011-01-17 10:57:55.000000000 -0800
++++ asterisk-1.4.39.1-vici/main/utils.c	2012-05-16 19:18:38.000000000 -0700
+@@ -951,18 +951,18 @@ int ast_carefulwrite(int fd, char *s, in
+ 					}
+ 					/* This was an acceptable error, go back into poll() */
+ 					continue;
++				} else if (errno != EPIPE) {
++					/* Fatal error, bail. */
++					ast_log(LOG_ERROR, "poll returned error: %s\n", strerror(errno));
+ 				}
+ 
+-				/* Fatal error, bail. */
+-				ast_log(LOG_ERROR, "poll returned error: %s\n", strerror(errno));
+-
+ 				return -1;
+ 			}
+ 		}
+ 
+ 		res = write(fd, s, len);
+ 
+-		if (res < 0 && errno != EAGAIN && errno != EINTR) {
++		if (res < 0 && errno != EAGAIN && errno != EINTR && errno != EPIPE) {
+ 			/* fatal error from write() */
+ 			ast_log(LOG_ERROR, "write() returned error: %s\n", strerror(errno));
+ 			return -1;
