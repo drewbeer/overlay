@@ -2,7 +2,7 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: /var/cvsroot/gentoo-x86/net-misc/asterisk/Attic/asterisk-1.4.39.1.ebuild,v 1.1 2010/12/01 17:54:28 chainsaw Exp $
 
-EAPI=3
+EAPI=4
 inherit autotools base eutils flag-o-matic linux-info multilib
 
 MY_P="${PN}-${PV/_/-}"
@@ -13,6 +13,7 @@ SRC_URI="http://downloads.asterisk.org/pub/telephony/asterisk/releases/${MY_P}.t
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="~amd64"
+FEATURES="-sandbox"
 
 IUSE="alsa +caps dahdi debug doc freetds imap jabber keepsrc misdn newt +samples odbc oss postgres radius snmp speex ssl sqlite static vanilla vorbis ilbc"
 
@@ -82,9 +83,7 @@ pkg_setup() {
 src_prepare() {
 	base_src_prepare
 	AT_M4DIR=autoconf eautoreconf
-	einfo "we are going to disable the hardened profile as there is an issue with it"
-	gcc-config 5
-
+	
 	einfo "downloading ilbc source"
 	# we want to download the ilbc codec source, and use our custom location as
 	# the one in the source doesn't work
@@ -95,6 +94,10 @@ src_prepare() {
 }
 
 src_configure() {
+
+	#einfo "we are going to disable the hardened profile as there is an issue with it"
+	#gcc-config 5
+
 	local vmst
 	econf \
 		--libdir="/usr/$(get_libdir)" \
@@ -334,8 +337,8 @@ pkg_config() {
 		einfo "skipping"
 	fi
 
-	einfo "reverting back back gcc"
-	gcc-config 1
+#	einfo "reverting back back gcc"
+#	gcc-config 1
 
 
 }
