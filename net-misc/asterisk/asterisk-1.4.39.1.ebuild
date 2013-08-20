@@ -334,7 +334,7 @@ pkg_config() {
 		einfo "skipping"
 	fi
 
-	einfo "reverting back back gcc
+	einfo "reverting back back gcc"
 	gcc-config 1
 
 
