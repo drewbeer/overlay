@@ -14,7 +14,7 @@ LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="~amd64"
 
-IUSE="alsa +caps dahdi debug doc freetds imap jabber keepsrc misdn newt +samples odbc oss postgres radius snmp speex ssl sqlite static vanilla vorbis"
+IUSE="alsa +caps dahdi debug doc freetds imap jabber keepsrc misdn newt +samples odbc oss postgres radius snmp speex ssl sqlite static vanilla vorbis ilbc"
 
 RDEPEND="sys-libs/ncurses
 	dev-libs/popt
@@ -42,9 +42,9 @@ DEPEND="${RDEPEND}
 	!>=net-misc/asterisk-addons-1.6
 	!net-misc/zaptel"
 
-PDEPEND="net-misc/asterisk-core-sounds
-	net-misc/asterisk-extra-sounds
-	net-misc/asterisk-moh-opsound"
+#PDEPEND="net-misc/asterisk-core-sounds
+#	net-misc/asterisk-extra-sounds
+#	net-misc/asterisk-moh-opsound"
 
 S="${WORKDIR}/${MY_P}"
 
@@ -82,40 +82,20 @@ pkg_setup() {
 src_prepare() {
 	base_src_prepare
 	AT_M4DIR=autoconf eautoreconf
+	einfo "we are going to disable the hardened profile as there is an issue with it"
+	gcc-config 5
 
-	# Custom menuselect options are defined in this file (it may remain empty)
-	#
-	>"${S}"/gentoo.makeopts
+	einfo "downloading ilbc source"
+	# we want to download the ilbc codec source, and use our custom location as
+	# the one in the source doesn't work
+	cp "${FILESDIR}"/get_ilbc_source.sh "${S}"/contrib/scripts/get_ilbc_source.sh
 
-	# Enable various debugging options if requested
-	#
-	if use debug; then
-		local debug_opts="DEBUG_CHANNEL_LOCKS DEBUG_THREADS DEBUG_FD_LEAKS"
-		einfo "Enabling debugging options: ${debug_opts}"
-		echo "MENUSELECT_CFLAGS=${debug_opts}" >> "${S}"/gentoo.makeopts
-	fi
-
-	# Enable IMAP storage in app_voicemail if requested
-	#
-	use imap && echo "MENUSELECT_OPTS_app_voicemail=IMAP_STORAGE" >> "${S}"/gentoo.makeopts
+	# we should also download  the source while we are add it
+	"${S}"/contrib/scripts/get_ilbc_source.sh
 }
 
 src_configure() {
-	if use debug; then
-		# Tone down the compiler flags somewhat. This should be less aggressive
-		# than the DONT_OPTIMIZE option whilst still producing useful results.
-		#
-		strip-flags
-		replace-flags -O? -O0
-	fi
-
-	if use imap; then
-		local imap_libs
-		has_version net-libs/c-client[pam] && imap_libs="-lpam"
-		has_version net-libs/c-client[ssl] && imap_libs="${imap_libs} -lssl"
-		export IMAP_LIBS="${imap_libs}"
-	fi
-
+	local vmst
 	econf \
 		--libdir="/usr/$(get_libdir)" \
 		--localstatedir="/var" \
@@ -132,21 +112,12 @@ src_configure() {
 		--without-usb \
 		--without-vpb \
 		--without-zaptel \
-		$(use_with alsa asound) \
 		$(use_with caps cap) \
 		$(use_with dahdi pri) \
 		$(use_with dahdi tonezone) \
 		$(use_with dahdi) \
 		$(use_with freetds tds) \
 		$(use_with imap imap system) \
-		$(use_with jabber iksemel) \
-		$(use_with misdn isdnnet) \
-		$(use_with misdn suppserv) \
-		$(use_with misdn) \
-		$(use_with newt) \
-		$(use_with odbc) \
-		$(use_with oss) \
-		$(use_with postgres) \
 		$(use_with radius) \
 		$(use_with snmp netsnmp) \
 		$(use_with speex) \
@@ -156,16 +127,84 @@ src_configure() {
 		$(use_with vorbis ogg) \
 		$(use_with vorbis) || die "econf failed"
 
-	#
-	# blank out sounds/sounds.xml file to prevent
-	# asterisk from installing sounds files (we pull them in via
-	# asterisk-{core,extra}-sounds and asterisk-moh-opsound.
-	#
-	>"${S}"/sounds/sounds.xml
+		# Blank out sounds/sounds.xml file to prevent
+		# asterisk from installing sounds files (we pull them in via
+		# asterisk-{core,extra}-sounds and asterisk-moh-opsound.
+		>"${S}"/sounds/sounds.xml
+		
+		# Compile menuselect binary for optional components
+		emake menuselect.makeopts
+		
+		# Broken functionality is forcibly disabled (bug #360143)
+		menuselect/menuselect --disable chan_misdn menuselect.makeopts
+		menuselect/menuselect --disable chan_ooh323 menuselect.makeopts
+		
+		# Utility set is forcibly enabled (bug #358001)
+		menuselect/menuselect --enable smsq menuselect.makeopts
+		menuselect/menuselect --enable streamplayer menuselect.makeopts
+		menuselect/menuselect --enable aelparse menuselect.makeopts
+		menuselect/menuselect --enable astman menuselect.makeopts
+		
+		# this is connected, otherwise it would not find
+		# ast_pktccops_gate_alloc symbol
+		menuselect/menuselect --enable chan_mgcp menuselect.makeopts
+		menuselect/menuselect --enable res_pktccops menuselect.makeopts
+		
+		# SSL is forcibly enabled, IAX2 & DUNDI are expected to be available
+		menuselect/menuselect --enable pbx_dundi menuselect.makeopts
+		menuselect/menuselect --enable func_aes menuselect.makeopts
+		menuselect/menuselect --enable chan_iax2 menuselect.makeopts
+		
+		# The others are based on USE-flag settings
+		use_select() {
+		        local state=$(use "$1" && echo enable || echo disable)
+		        shift # remove use from parameters
+		
+		        while [[ -n $1 ]]; do
+		                menuselect/menuselect --${state} "$1" menuselect.makeopts
+		                shift
+		        done
+		}
+		
+		use_select ais                  res_ais
+		use_select calendar             res_calendar res_calendar_{caldav,ews,exchange,icalendar}
+		use_select curl                 func_curl res_config_curl res_curl
+		use_select dahdi                app_dahdibarge app_dahdiras chan_dahdi codec_dahdi res_timing_dahdi
+		use_select freetds              {cdr,cel}_tds
+		use_select gtalk                chan_gtalk
+		use_select http                 res_http_post
+		use_select iconv                func_iconv
+		use_select ilbc			codec_ilbc
+		use_select jabber               res_jabber
+		use_select jingle               chan_jingle
+		use_select ldap                 res_config_ldap
+		use_select lua                  pbx_lua
+		use_select mysql                app_mysql cdr_mysql res_config_mysql
+		use_select odbc                 cdr_adaptive_odbc res_config_odbc {cdr,cel,res,func}_odbc
+		use_select osplookup		app_osplookup
+		use_select oss                  chan_oss
+		use_select postgres             {cdr,cel}_pgsql res_config_pgsql
+		use_select radius               {cdr,cel}_radius
+		use_select snmp                 res_snmp
+		use_select span                 res_fax_spandsp
+		use_select speex                {codec,func}_speex
+		use_select sqlite               cdr_sqlite
+		use_select sqlite3              {cdr,cel}_sqlite3_custom
+		use_select srtp                 res_srtp
+		use_select syslog               cdr_syslog
+		use_select vorbis               format_ogg_vorbis
+		
+		# Voicemail storage ...
+		for vmst in ${IUSE_VOICEMAIL_STORAGE/+/}; do
+		        if use ${vmst}; then
+		                menuselect/menuselect --enable $(echo ${vmst##*_} | tr '[:lower:]' '[:upper:]')_STORAGE menuselect.makeopts
+		        fi
+		done
 }
 
 src_compile() {
-	ASTLDFLAGS="${LDFLAGS}" emake USER_MAKEOPTS="${S}"/gentoo.makeopts || die "emake failed"
+	ASTLDFLAGS="${LDFLAGS}" emake
+#	ASTLDFLAGS="${LDFLAGS}" emake USER_MAKEOPTS="${S}"/gentoo.makeopts || die "emake failed"
 }
 
 src_install() {
@@ -179,7 +218,7 @@ src_install() {
 		emake DESTDIR="${D}" samples || die "emake samples failed"
 		for conffile in "${D}"etc/asterisk/*.*
 		do
-			chown asterisk:asterisk $conffile
+			chown root:root $conffile
 			chmod 0660 $conffile
 		done
 		einfo "Sample files have been installed"
@@ -193,13 +232,13 @@ src_install() {
 	rm -rf "${D}"var/spool/asterisk/voicemail/default
 
 	# keep directories
-	diropts -m 0770 -o asterisk -g asterisk
+	diropts -m 0770 -o root -g root
 	keepdir	/etc/asterisk
 	keepdir /var/lib/asterisk
 	keepdir /var/run/asterisk
 	keepdir /var/spool/asterisk
 	keepdir /var/spool/asterisk/{system,tmp,meetme,monitor,dictate,voicemail}
-	diropts -m 0750 -o asterisk -g asterisk
+	diropts -m 0750 -o root -g root
 	keepdir /var/log/asterisk/{cdr-csv,cdr-custom}
 
 	newinitd "${FILESDIR}"/1.4.39.1/asterisk.initd asterisk
@@ -250,11 +289,6 @@ src_install() {
 	newins "${FILESDIR}/1.4.39.1/asterisk.logrotate" asterisk
 }
 
-pkg_preinst() {
-	enewgroup asterisk
-	enewuser asterisk -1 -1 /var/lib/asterisk "asterisk,dialout"
-}
-
 pkg_postinst() {
 	#
 	# Announcements, warnings, reminders...
@@ -299,4 +333,9 @@ pkg_config() {
 	else
 		einfo "skipping"
 	fi
+
+	einfo "reverting back back gcc
+	gcc-config 1
+
+
 }
