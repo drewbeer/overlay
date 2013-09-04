@@ -1,0 +1,12 @@
+--- asterisk-1.4.39.1/include/asterisk/dahdi_compat.h	2009-02-13 13:53:16.000000000 -0800
++++ asterisk-1.4.39.1-vici/include/asterisk/dahdi_compat.h	2011-02-08 18:15:16.000000000 -0800
+@@ -320,6 +320,9 @@
+ #if defined(ZT_SETTONEZONE)
+ #define DAHDI_SETTONEZONE ZT_SETTONEZONE
+ #endif
++#if defined(ZT_SIG_CAS)
++#define DAHDI_SIG_CAS ZT_SIG_CAS
++#endif
+ #if defined(ZT_SIG_CLEAR)
+ #define DAHDI_SIG_CLEAR ZT_SIG_CLEAR
+ #endif
