@@ -1,0 +1,19 @@
+--- asterisk-1.4.39.1/configure.ac	2010-10-04 13:15:26.000000000 -0700
++++ asterisk-1.4.39.1-vici/configure.ac	2011-02-08 18:15:16.000000000 -0800
+@@ -260,6 +260,7 @@ AST_EXT_LIB_SETUP([PGSQL], [PostgreSQL],
+ AST_EXT_LIB_SETUP([PRI], [ISDN PRI], [pri])
+ AST_EXT_LIB_SETUP_DEPENDENT([PRI_VERSION], [ISDN PRI get_version], [PRI], [pri])
+ AST_EXT_LIB_SETUP_DEPENDENT([PRI_INBANDDISCONNECT], [ISDN PRI set_inbanddisconnect], [PRI], [pri])
++AST_EXT_LIB_SETUP([OPENR2], [MFCR2], [openr2])
+ AST_EXT_LIB_SETUP([PWLIB], [PWlib], [pwlib])
+ AST_EXT_LIB_SETUP([RADIUS], [Radius Client], [radius])
+ AST_EXT_LIB_SETUP([SPEEX], [Speex], [speex])
+@@ -1498,6 +1499,8 @@ AST_EXT_LIB_CHECK([PRI_VERSION], [pri],
+ 
+ AST_EXT_LIB_CHECK([PRI_INBANDDISCONNECT], [pri], [pri_set_inbanddisconnect], [libpri.h])
+ 
++AST_EXT_LIB_CHECK([OPENR2], [openr2], [openr2_chan_new], [openr2.h])
++
+ if test "${USE_PWLIB}" != "no"; then
+ 	if test -n "${PWLIB_DIR}"; then
+ 		PWLIBDIR="${PWLIB_DIR}"
