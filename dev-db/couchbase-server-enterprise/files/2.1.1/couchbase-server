@@ -1,0 +1,135 @@
+#!/sbin/runscript
+# Copyright 1999-2010 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+if [ "$(id -u)" != "0" ]; then
+    log_failure_msg "Must run as root"
+    exit 1
+fi
+
+#PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+DAEMON=/opt/couchbase/bin/couchbase-server
+PIDFILE=/opt/couchbase/var/lib/couchbase/couchbase-server.pid
+NODEFILE=/opt/couchbase/var/lib/couchbase/couchbase-server.node
+COOKIEFILE=/opt/couchbase/var/lib/couchbase/couchbase-server.cookie
+
+WAIT_TIMEOUT=60
+WAIT_INTERVAL=1
+
+test -f $DAEMON || exit 1
+
+internal_start() {
+    touch $PIDFILE $NODEFILE $COOKIEFILE
+    chown couchbase $PIDFILE $NODEFILE $COOKIEFILE
+    cd /opt/couchbase/var/lib/couchbase
+    ulimit -n 10240
+    ulimit -c unlimited
+    ulimit -l unlimited
+    start-stop-daemon --start --quiet --chdir "$PWD" -u couchbase --exec /bin/sh  -- -c "$DAEMON -- -noinput -detached > /opt/couchbase/var/lib/couchbase/logs/start.log 2>&1"
+    errcode=$?
+    return $errcode
+}
+
+wait_running() {
+    time_elapsed=0
+    while [ $time_elapsed -lt $WAIT_TIMEOUT ]; do
+        if internal_running; then
+            return 0
+        fi
+        sleep $WAIT_INTERVAL
+        time_elapsed=$((time_elapsed+WAIT_INTERVAL))
+    done
+    return 1
+}
+
+start_checking() {
+    internal_start
+    if wait_running; then
+        true
+    else
+        eerror "Failed to start couchbase-server: timed out"
+        return 1
+    fi
+}
+
+internal_stop() {
+    $DAEMON -k
+    errcode=$?
+    return $errcode
+}
+
+internal_running() {
+    pidofproc -p $PIDFILE $DAEMON >/dev/null
+    errcode=$?
+    return $errcode
+}
+
+start() {
+  ebegin "Starting Couchbase server"
+  if internal_running ; then
+    ewarn "couchbase-server is already started"
+    eend 0
+  fi
+  start_checking
+  eend $?
+}
+
+stop() {
+  ebegin "Stopping Couchbase server"
+  internal_stop
+  eend $?
+}
+
+status() {
+    if internal_running ; then
+      einfo "status: started"
+      return 0
+    else
+      einfo "status: stopped"
+      return 3
+    fi
+}
+
+pidofproc () {
+    local pidfile line i pids= status specified pid
+    pidfile=
+    specified=
+   
+    OPTIND=1
+    while getopts p: opt ; do
+        case "$opt" in
+            p)  pidfile="$OPTARG"; specified=1;;
+        esac
+    done
+    shift $(($OPTIND - 1))
+
+    if [ -z "${pidfile:-}" ]; then
+        pidfile=/var/run/${1##*/}.pid
+    fi
+
+    if [ -f "$pidfile" ]; then
+        read pid < "$pidfile"
+        if [ -n "${pid:-}" ]; then
+            if $(kill -0 "${pid:-}" 2> /dev/null); then
+                echo "$pid"
+                return 0
+            elif ps "${pid:-}" >/dev/null 2>&1; then
+                echo "$pid"
+                return 0 # program is running, but not owned by this user
+            else
+                return 1 # program is dead and /var/run pid file exists
+            fi
+        fi
+    fi
+    if [ -x /bin/pidof -a ! "$specified" ]; then
+        status="0"
+        /bin/pidof -o %PPID $1 || status="$?"
+        if [ "$status" = 1 ]; then
+            return 3 # program is not running
+        fi
+        return 0
+    fi
+    return 4 # program or service is unknown
+}
