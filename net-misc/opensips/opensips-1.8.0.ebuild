@@ -16,7 +16,7 @@ KEYWORDS="~x86 ~amd64"
 IUSE="debug ipv6 mysql postgres radius jabber ssl cpl unixodbc b2bua presence"
 
 RDEPEND="
-	mysql? ( >=dev-db/mysql-4.1.20 )
+	mysql? ( >=dev-db/mariadb-4.1.20 )
 	radius? ( >=net-dialup/radiusclient-ng-0.5.0 )
 	postgres? ( >=dev-db/postgresql-8.0.8 )
 	jabber? ( dev-libs/expat )
