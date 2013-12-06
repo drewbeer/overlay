@@ -101,7 +101,7 @@ src_install () {
 		cfg-target=${D}/etc/opensips \
 		modules-prefix=${D}/usr/lib/opensips \
 		modules-dir=modules \
-		modules-target=${D}/usr/lib/opensips/modules/ \
+		modules-target=${D}/usr/lib/opensips/modules \
 		man-prefix=${D}/usr/share/man \
 		man-dir="" \
 		doc-prefix=${D}/usr/share/doc \
@@ -109,6 +109,7 @@ src_install () {
 		data-prefix=${D}/usr || die
 	exeinto /etc/init.d
 	newexe ${FILESDIR}/opensips.init opensips
+	newconfd ${FILESDIR}/opensips.defaults opensips
 	mv menuconfig/configure menuconfig/osipsconfig
 	dosbin menuconfig/osipsconfig 
 	# fix what the Makefile don't do

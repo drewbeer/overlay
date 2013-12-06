@@ -1,17 +1,15 @@
 #!/sbin/runscript
 # $Header$
 
-PATH=/sbin:/bin:/usr/sbin:/usr/bin
 DAEMON=/usr/sbin/opensips
-NAME=opensips
-DESC=opensips
 HOMEDIR=/var/run/opensips
-PIDFILE_LRN=$HOMEDIR/LRN_$NAME.pid
-PIDFILE_FAKERING=$HOMEDIR/FAKERING_$NAME.pid
-PIDFILE_RTP=$HOMEDIR/RTP_$NAME.pid
-PIDFILE_NORTP=$HOMEDIR/NORTP_$NAME.pid
-PIDFILE_INDIALIN=$HOMEDIR/INDIALIN_$NAME.pid
-PIDFILE_INDID=$HOMEDIR/INDID_$NAME.pid
+NAME=opensips
+PIDFILE_LRN=${HOMEDIR}/LRN_${NAME}.pid
+PIDFILE_FAKERING=${HOMEDIR}/FAKERING_${NAME}.pid
+PIDFILE_RTP=${HOMEDIR}/RTP_${NAME}.pid
+PIDFILE_NORTP=${HOMEDIR}/NORTP_${NAME}.pid
+PIDFILE_INDIALIN=${HOMEDIR}/INDIALIN_${NAME}.pid
+PIDFILE_INDID=${HOMEDIR}/INDID_${NAME}.pid
 
 DEFAULTS=/etc/conf.d/opensips
 RUN_OPENSIPS=no
@@ -31,58 +29,9 @@ depend() {
         need net
 }
 
-# Do not start opensips if fork=no is set in the config file
-# otherwise the boot process will just stop
-check_fork ()
-{
-    if grep -q "^[[:space:]]*fork[[:space:]]*=[[:space:]]*no.*" /etc/opensips/opensips.cfg; then
-	echo "Not starting $DESC: fork=no specified in config file; run /etc/init.d/opensips debug instead"
-	exit 1
-    fi
-}
-
-check_opensips_config ()
-{
-	# Check if opensips configuration is valid before starting the server
-	set +e
-	out=$($DAEMON -c 2>&1 > /dev/null)
-	retcode=$?
-	set -e
-	if [ "$retcode" != '0' ]; then
-	    echo "Not starting $DESC: invalid configuration file!"
-	    echo -e "\n$out\n"
-	    exit 1
-	fi
-}
-
-create_radius_seqfile ()
-{
-    # Create a radius sequence file to be used by the radius client if
-    # radius accounting is enabled. This is needed to avoid any issue
-    # with the file not being writable if opensips first starts as user
-    # root because DUMP_CORE is enabled and creates this file as user
-    # root and then later it switches back to user opensips and cannot
-    # write to the file. If the file exists before opensips starts, it
-    # won't change it's ownership and will be writable for both root
-    # and opensips, no matter what options are chosen at install time
-    RADIUS_SEQ_FILE=/var/run/opensips/opensips_radius.seq
-    if [ -d /var/run/opensips ]; then
-	chown ${USER}:${GROUP} /var/run/opensips
-
-	if [ ! -f $RADIUS_SEQ_FILE ]; then
-	    touch $RADIUS_SEQ_FILE
-	fi
-
-	chown ${USER}:${GROUP} $RADIUS_SEQ_FILE
-	chmod 660 $RADIUS_SEQ_FILE
-    fi
-}
-
-test -f $DAEMON || exit 0
-
 # Load startup options if available
-if [ -f $DEFAULTS ]; then
-   . $DEFAULTS || true
+if [ -f /etc/conf.d/opensips ]; then
+   . /etc/conf.d/opensips || true
 fi
 
 if [ "$RUN_OPENSIPS" != "yes" ]; then
@@ -92,231 +41,79 @@ fi
 
 set -e
 
-S_MEMORY=$((`echo $S_MEMORY | sed -e 's/[^0-9]//g'`))
-P_MEMORY=$((`echo $P_MEMORY | sed -e 's/[^0-9]//g'`))
-[ -z "$USER" ]  && USER=opensips
-[ -z "$GROUP" ] && GROUP=opensips
-[ $S_MEMORY -le 0 ] && S_MEMORY=32
-[ $P_MEMORY -le 0 ] && P_MEMORY=32
+S_MEMORY=$((`echo ${S_MEMORY} | sed -e 's/[^0-9]//g'`))
+P_MEMORY=$((`echo ${P_MEMORY} | sed -e 's/[^0-9]//g'`))
+[ -z "${USER}" ]  && USER=opensips
+[ -z "${GROUP}" ] && GROUP=opensips
+[ ${S_MEMORY} -le 0 ] && S_MEMORY=32
+[ ${P_MEMORY} -le 0 ] && P_MEMORY=32
 
-if test "$DUMP_CORE" = "yes" ; then
-    # set proper ulimit
-    ulimit -c unlimited
-    
-    # directory for the core dump files
-    # COREDIR=/home/corefiles
-    # [ -d $COREDIR ] || mkdir $COREDIR
-    # chmod 777 $COREDIR
-    # echo "$COREDIR/core.%e.sig%s.%p" > /proc/sys/kernel/core_pattern
-fi
+OPTIONS_LRN="-P ${PIDFILE_LRN} -m ${S_MEMORY} -M ${P_MEMORY} -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_lrn.cfg"
+OPTIONS_FAKERING="-P ${PIDFILE_FAKERING} -m ${S_MEMORY} -M $P_MEMORY -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_fake_ring.cfg"
+OPTIONS_RTP="-P ${PIDFILE_RTP} -m ${S_MEMORY} -M $P_MEMORY -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_rtp.cfg"
+OPTIONS_NORTP="-P ${PIDFILE_NORTP} -m ${S_MEMORY} -M ${P_MEMORY} -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_nortp.cfg"
+OPTIONS_INDIALIN="-P ${PIDFILE_INDIALIN} -m ${S_MEMORY} -M ${P_MEMORY} -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_inbound_dialin.cfg"
+OPTIONS_INDID="-P ${PIDFILE_INDID} -m ${S_MEMORY} -M ${P_MEMORY} -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_inbound_did.cfg"
 
-OPTIONS_LRN="-P $PIDFILE_LRN -m $S_MEMORY -M $P_MEMORY -u $USER -g $GROUP -f /etc/opensips/opensips_lrn.cfg"
-OPTIONS_FAKERING="-P $PIDFILE_FAKERING -m $S_MEMORY -M $P_MEMORY -u $USER -g $GROUP -f /etc/opensips/opensips_fake_ring.cfg" 
-OPTIONS_RTP="-P $PIDFILE_RTP -m $S_MEMORY -M $P_MEMORY -u $USER -g $GROUP -f /etc/opensips/opensips_rtp.cfg"
-OPTIONS_NORTP="-P $PIDFILE_NORTP -m $S_MEMORY -M $P_MEMORY -u $USER -g $GROUP -f /etc/opensips/opensips_nortp.cfg"
-OPTIONS_INDIALIN="-P $PIDFILE_INDIALIN -m $S_MEMORY -M $P_MEMORY -u $USER -g $GROUP -f /etc/opensips/opensips_inbound_dialin.cfg"
-OPTIONS_INDID="-P $PIDFILE_INDID -m $S_MEMORY -M $P_MEMORY -u $USER -g $GROUP -f /etc/opensips/opensips_inbound_did.cfg"
-
-case "$1" in
-  start|debug)
-	#check_opensips_config
-	create_radius_seqfile
-
-	#if [ "$1" != "debug" ]; then
-	#    check_fork
-	#fi
-
+start() {
 	# dirs under /var/run can go away on reboots.
-	mkdir -p "$HOMEDIR"
-	chmod 775 "$HOMEDIR"
-	chown "$USER:$GROUP" "$HOMEDIR" >/dev/null 2>&1 || true
-
-	echo -n "Starting LRN $DESC: $NAME"
-	start-stop-daemon --start --quiet --pidfile $PIDFILE_LRN \
-		--exec $DAEMON -- $OPTIONS_LRN || echo -n " already running"
-	echo "."
+	mkdir -p "${HOMEDIR}"
+	chmod 775 "${HOMEDIR}"
+	chown "${USER}:${GROUP}" "${HOMEDIR}" >/dev/null 2>&1 || true
 	
-        echo -n "Starting FAKE RING $DESC: $NAME"
-        start-stop-daemon --start --quiet --pidfile $PIDFILE_FAKERING \
-                --exec $DAEMON -- $OPTIONS_FAKERING || echo -n " already running"
-        echo "."
-
-        echo -n "Starting RTP $DESC: $NAME"
-        start-stop-daemon --start --quiet --pidfile $PIDFILE_RTP \
-                --exec $DAEMON -- $OPTIONS_RTP || echo -n " already running"
-        echo "."
-
-        echo -n "Starting NORTP $DESC: $NAME"
-        start-stop-daemon --start --quiet --pidfile $PIDFILE_NORTP \
-                --exec $DAEMON -- $OPTIONS_NORTP || echo -n " already running"
-        echo "."
+	ebegin "Starting LRN - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_LRN} \
+	--exec ${DAEMON} -- ${OPTIONS_LRN}
+	eend $?
 	
-        echo -n "Starting INBOUND DIAL IN $DESC: $NAME"
-        start-stop-daemon --start --quiet --pidfile $PIDFILE_INDIALIN \
-              --exec $DAEMON -- $OPTIONS_INDIALIN || echo -n " already running"
-        echo "."
+	ebegin "Starting FAKE RING - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_FAKERING} \
+	--exec ${DAEMON} -- ${OPTIONS_FAKERING}
+	eend $?
+	
+	ebegin "Starting RTP - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_RTP} \
+	        --exec ${DAEMON} -- ${OPTIONS_RTP}
+	eend $?
+	
+	ebegin "Starting NORTP - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_NORTP} \
+	        --exec ${DAEMON} -- ${OPTIONS_NORTP}
+	eend $?
+	
+	ebegin "Starting INBOUND DIAL IN - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_INDIALIN} \
+	      --exec ${DAEMON} -- ${OPTIONS_INDIALIN}
+	eend $?
+	
+	ebegin "Starting INBOUND DID - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_INDID} \
+	        --exec ${DAEMON} -- ${OPTIONS_INDID}
+	eend $?
+}
 
-        echo -n "Starting INBOUND DID $DESC: $NAME"
-        start-stop-daemon --start --quiet --pidfile $PIDFILE_INDID \
-                --exec $DAEMON -- $OPTIONS_INDID || echo -n " already running"
-        echo "."
-	;;
-  stop)
-        echo -n "Stopping LRN $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_LRN \
-                --exec $DAEMON
-        echo "."
-
-        echo -n "Stopping FAKE RING $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_FAKERING \
-                --exec $DAEMON
-        echo "."
-
-        echo -n "Stopping RTP $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_RTP \
-                --exec $DAEMON
-        echo "."
-
-        echo -n "Stopping NORTP $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_NORTP \
-                --exec $DAEMON
-        echo "."
-
-        echo -n "Stopping INBOUND DIAL IN $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_INDIALIN \
-              --exec $DAEMON
-        echo "."
-
-        echo -n "Stopping INBOUND DID $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_INDID \
-                --exec $DAEMON
-        echo "."
-
-	;;
-  restart|force-reload)
-	#check_opensips_config
-	create_radius_seqfile
-
-        echo -n "Restarting LRN $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_LRN \
-                --exec $DAEMON
-        sleep 1
-        start-stop-daemon --start --quiet --pidfile $PIDFILE_LRN \
-                --exec $DAEMON -- $OPTIONS_LRN
-        echo "."
-
-        echo -n "Restarting FAKE RING $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_FAKERING \
-                --exec $DAEMON
-        sleep 1
-        start-stop-daemon --start --quiet --pidfile $PIDFILE_FAKERING \
-                --exec $DAEMON -- $OPTIONS_FAKERING
-        echo "."
-
-        echo -n "Restarting RTP $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_RTP \
-                --exec $DAEMON
-        sleep 1
-        start-stop-daemon --start --quiet --pidfile $PIDFILE_RTP \
-                --exec $DAEMON -- $OPTIONS_RTP
-        echo "."
-
-        echo -n "Restarting NORTP $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_NORTP \
-                --exec $DAEMON
-        sleep 1
-        start-stop-daemon --start --quiet --pidfile $PIDFILE_NORTP \
-                --exec $DAEMON -- $OPTIONS_NORTP
-        echo "."
-
-        echo -n "Restarting INBOUND DIAL IN $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_INDIALIN \
-              --exec $DAEMON
-        sleep 1
-        start-stop-daemon --start --quiet --pidfile $PIDFILE_INDIALIN \
-                --exec $DAEMON -- $OPTIONS_INDIALIN
-        echo "."
-
-        echo -n "Restarting INBOUND DID $DESC: $NAME"
-        start-stop-daemon --oknodo --stop --quiet --pidfile $PIDFILE_INDID \
-                --exec $DAEMON
-        sleep 1
-        start-stop-daemon --start --quiet --pidfile $PIDFILE_INDID \
-                --exec $DAEMON -- $OPTIONS_INDID
-        echo "."
-	;;
-  status)
-        echo -n "Status of LRN $DESC: "
-        if [ ! -r "$PIDFILE_LRN" ]; then
-                echo "$NAME is not running."
-        fi
-        if read pid < "$PIDFILE_LRN" && ps -p "$pid" > /dev/null 2>&1; then
-                echo "$NAME is running."
-        else
-                echo "$NAME is not running but $PIDFILE_LRN exists."
-        fi
-	echo "."
-
-        echo -n "Status of FAKE RING $DESC: "
-        if [ ! -r "$PIDFILE_FAKERING" ]; then
-                echo "$NAME is not running."
-        fi
-        if read pid < "$PIDFILE_FAKERING" && ps -p "$pid" > /dev/null 2>&1; then
-                echo "$NAME is running."
-        else
-                echo "$NAME is not running but $PIDFILE_FAKERING exists."
-        fi
-	echo "."
-
-        echo -n "Status of RTP $DESC: "
-        if [ ! -r "$PIDFILE_RTP" ]; then
-                echo "$NAME is not running."
-        fi
-        if read pid < "$PIDFILE_RTP" && ps -p "$pid" > /dev/null 2>&1; then
-                echo "$NAME is running."
-        else
-                echo "$NAME is not running but $PIDFILE_RTP exists."
-        fi
-	echo "."
-
-        echo -n "Status of NORTP $DESC: "
-        if [ ! -r "$PIDFILE_NORTP" ]; then
-                echo "$NAME is not running."
-        fi
-        if read pid < "$PIDFILE_NORTP" && ps -p "$pid" > /dev/null 2>&1; then
-                echo "$NAME is running."
-        else
-                echo "$NAME is not running but $PIDFILE_NORTP exists."
-        fi
-	echo "."
-
-        echo -n "Status of INBOUND DIAL IN $DESC: "
-        if [ ! -r "$PIDFILE_INDIALIN" ]; then
-                echo "$NAME is not running."
-        fi
-        if read pid < "$PIDFILE_INDIALIN" && ps -p "$pid" > /dev/null 2>&1; then
-                echo "$NAME is running."
-        else
-                echo "$NAME is not running but $PIDFILE_INDIALIN exists."
-        fi
-	echo "."
-
-        echo -n "Status of INBOUND DID $DESC: "
-        if [ ! -r "$PIDFILE_INDID" ]; then
-                echo "$NAME is not running."
-        fi
-        if read pid < "$PIDFILE_INDID" && ps -p "$pid" > /dev/null 2>&1; then
-                echo "$NAME is running."
-        else
-                echo "$NAME is not running but $PIDFILE_INDID exists."
-        fi
-	echo "."
-	;;
-  *)
-	N=/etc/init.d/$NAME
-	echo "Usage: $N {start|stop|restart|force-reload|debug|status}" >&2
-	exit 1
-	;;
-esac
-
-exit 0
+stop() {
+	ebegin "Stopping LRN - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_LRN}
+	eend $?
+	
+	ebegin "Stopping FAKE RING - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_FAKERING}
+	eend $?
+	
+	ebegin "Stopping RTP - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_RTP}
+	eend $?
+	
+	ebegin "Stopping NORTP - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_NORTP}
+	eend $?
+	
+	ebegin "Stopping INBOUND DIAL IN - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_INDIALIN}
+	eend $?
+	
+	ebegin "Stopping INBOUND DID - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_INDID}
+	eend $?
+}
