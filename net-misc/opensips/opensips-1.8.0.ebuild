@@ -109,7 +109,7 @@ src_install () {
 		data-prefix=${D}/usr || die
 	exeinto /etc/init.d
 	newexe ${FILESDIR}/opensips.init opensips
-	newconfd ${FILESDIR}/opensips.defaults opensips
+	newconfd ${FILESDIR}/opensips.default opensips
 	mv menuconfig/configure menuconfig/osipsconfig
 	dosbin menuconfig/osipsconfig 
 	# fix what the Makefile don't do
