@@ -6,8 +6,8 @@ EAPI="2"
 
 inherit eutils
 
-MAGIC="235-a263b7e"
-# http://downloads.plexapp.com/plex-media-server/0.9.8.6.175-88ffbb2/plexmediaserver_0.9.8.6.175-88ffbb2_amd64.deb
+MAGIC="263-139ddbc"
+# http://downloads.plexapp.com/plex-media-server/0.9.8.14.263-139ddbc/plexmediaserver_0.9.8.14.263-139ddbc_amd64.deb
 URI_PRE="http://downloads.plexapp.com/plex-media-server/${PV}.${MAGIC}/plexmediaserver_${PV}.${MAGIC}_"
 
 DESCRIPTION="Plex Media Server is a free media library that is intended for use with a plex client available for OS X, iOS and Android systems. It is a standalone product which can be used in conjunction with every program, that knows the API. For managing the library a web based interface is provided."
