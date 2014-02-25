@@ -6,7 +6,8 @@ EAPI="2"
 
 inherit eutils
 
-MAGIC="374-aa23a69"
+# 0.9.9.5.411-da1d892
+MAGIC="411-da1d892"
 # http://downloads.plexapp.com/plex-media-server/0.9.8.14.263-139ddbc/plexmediaserver_0.9.8.14.263-139ddbc_amd64.deb
 URI_PRE="http://downloads.plexapp.com/plex-media-server/${PV}.${MAGIC}/plexmediaserver_${PV}.${MAGIC}_"
 
