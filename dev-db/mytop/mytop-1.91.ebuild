@@ -11,7 +11,7 @@ HOMEPAGE="http://mirrors.safesoft.us/gentoo/mytop/"
 SRC_URI="http://mirrors.safesoft.us/gentoo/mytop/${P}.tar.gz"
 
 LICENSE="|| ( Artistic GPL-2 )"
-KEYWORDS="~alpha ~amd64 ~ppc ~sparc x86"
+KEYWORDS="alpha amd64 ppc sparc x86"
 SLOT="0"
 IUSE=""
 
