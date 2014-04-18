@@ -1,0 +1,18 @@
+*mariadb-galera-5.5.35 (14 Feb 2014)
+
+  14 Feb 2014;  <grknight@gentoo.org> +mariadb-galera-5.5.35.ebuild,
+  -mariadb-galera-5.5.33a.ebuild:
+  [mariadb-galera] Version bump to 5.5.35
+
+*mariadb-galera-5.5.33a (09 Oct 2013)
+
+  09 Oct 2013; Brian Evans <grknight@tuffmail.com>
+  +mariadb-galera-5.5.33a.ebuild:
+  [mariadb-galera] Version bump to 5.5.33a
+
+*mariadb-galera-5.5.32 (17 Sep 2013)
+
+  17 Sep 2013; Brian Evans <grknight@tuffmail.com>
+  +mariadb-galera-5.5.32.ebuild:
+  [mariadb-galera] Version bump to 5.5.32 sys_vars.all_vars test fails but known
+  upstream per IRC as a variable name was missed and not added in test

@@ -1,0 +1,9 @@
+# Brian Evans <grknight@tuffmail.com> (16 Dec 2013)
+# Add percona-server to the mask until the virtual is unmasked
+>=dev-db/percona-server-5.6
+
+# Robin H. Johnson <robbat2@gentoo.org> (04 Mar 2013)
+# Only 5.6 remains masked.
+>=dev-db/mariadb-5.6
+>=dev-db/mysql-5.6
+>=virtual/mysql-5.6
