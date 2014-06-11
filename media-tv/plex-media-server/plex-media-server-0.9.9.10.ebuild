@@ -6,11 +6,14 @@ EAPI="2"
 
 inherit eutils
 
+MAGIC="458-008ea34"
+URI_PRE="http://downloads.plexapp.com/plex-media-server/${PV}.${MAGIC}/plexmediaserver_${PV}.${MAGIC}_"
+
 DESCRIPTION="Plex Media Server is a free media library that is intended for use with a plex client available for OS X, iOS and Android systems. It is a standalone product which can be used in conjunction with every program, that knows the API. For managing the library a web based interface is provided."
 HOMEPAGE="http://www.plexapp.com/"
 KEYWORDS="-* ~x86 ~amd64"
-SRC_URI="x86?	( http://plex.r.worldssl.net/PlexMediaServer/0.9.7.17.469-1f0b170/plexmediaserver_0.9.7.17.469-1f0b170_i386.deb )
-	amd64?	( http://plex.r.worldssl.net/PlexMediaServer/0.9.7.17.469-1f0b170/plexmediaserver_0.9.7.17.469-1f0b170_amd64.deb )"
+SRC_URI="x86? ( ${URI_PRE}i386.deb )
+	amd64?  ( ${URI_PRE}amd64.deb )"
 SLOT="0"
 LICENSE="PMS-License"
 IUSE=""
@@ -29,7 +32,7 @@ pkg_setup() {
 pkg_preinst() {
 	einfo "unpacking DEB File"
 	cd ${WORKDIR}
-	ar x ${DISTDIR}/${A}
+	# ar x ${DISTDIR}/${A}
         mkdir data
         mkdir control
         tar -xzf data.tar.gz -C data
@@ -90,11 +93,11 @@ pkg_prerm() {
 }
 
 pkg_postinst() {
-	einfo ""
-	elog "Patching Plex binaries with pax headers"
-	sh "${FILESDIR}"/pax_fix.sh
-	elog "Plex binaries have been patched"
-	einfo ""
+        einfo ""
+        elog "Patching Plex binaries with pax headers"
+        sh "${FILESDIR}"/pax_fix.sh
+        elog "Plex binaries have been patched"
+        einfo ""
 
 	einfo ""
 	elog "Plex Media Server is now fully installed. Please check the configuration file in /etc/plex if the defaults please your needs."
