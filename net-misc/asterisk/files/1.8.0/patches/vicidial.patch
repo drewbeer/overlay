@@ -970,3 +970,23 @@ diff -ur asterisk-1.8.23.0/channels/sip/include/sip.h asterisk-1.8.23.0-vici/cha
  	int lastmsgssent;
  	unsigned int sipoptions;        /*!<  Supported SIP options */
 Only in asterisk-1.8.23.0-vici/channels/sip/include: sip.h.orig
+diff -ur asterisk-1.8.23.0/main/utils.c asterisk-1.8.23.0-vici/main/utils.c
+--- asterisk-1.8.23.0/main/utils.c	2013-05-01 23:43:24.000000000 -0700
++++ asterisk-1.8.23.0-vici/main/utils.c	2014-06-24 12:10:43.877471981 -0700
+@@ -1229,11 +1229,11 @@
+ 
+ 		res = write(fd, s, len);
+ 
+-		if (res < 0 && errno != EAGAIN && errno != EINTR) {
+-			/* fatal error from write() */
+-			ast_log(LOG_ERROR, "write() returned error: %s\n", strerror(errno));
+-			return -1;
+-		}
++                if (res < 0 && errno != EAGAIN && errno != EINTR) {
++                        /* fatal error from write() */
++                        ast_log(LOG_ERROR, "write() returned error[%d]: %s\n",errno,strerror(errno));
++                        return -1;
++                }
+ 
+ 		if (res < 0) {
+ 			/* It was an acceptable error */
