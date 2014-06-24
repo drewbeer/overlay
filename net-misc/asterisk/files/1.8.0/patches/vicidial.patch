@@ -982,7 +982,7 @@ diff -ur asterisk-1.8.23.0/main/utils.c asterisk-1.8.23.0-vici/main/utils.c
 -			ast_log(LOG_ERROR, "write() returned error: %s\n", strerror(errno));
 -			return -1;
 -		}
-+                if (res < 0 && errno != EAGAIN && errno != EINTR) {
++                if (res < 0 && errno != EAGAIN && errno != EINTR && errno != 32) {
 +                        /* fatal error from write() */
 +                        ast_log(LOG_ERROR, "write() returned error[%d]: %s\n",errno,strerror(errno));
 +                        return -1;
