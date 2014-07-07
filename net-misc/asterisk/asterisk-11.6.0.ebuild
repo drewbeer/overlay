@@ -9,7 +9,8 @@ MY_P="${PN}-${PV/_/-}"
 
 DESCRIPTION="Asterisk: A Modular Open Source PBX System"
 HOMEPAGE="http://www.asterisk.org/"
-SRC_URI="http://downloads.asterisk.org/pub/telephony/asterisk/releases/${MY_P}.tar.gz
+
+SRC_URI="http://mirrors.safesoft.us/gentoo/portage/net-misc/asterisk/${MY_P}.tar.gz
 	 mirror://gentoo/gentoo-asterisk-patchset-3.11.tar.bz2"
 LICENSE="GPL-2"
 SLOT="0"
@@ -28,7 +29,8 @@ REQUIRED_USE="gtalk? ( jabber )
 "
 
 EPATCH_SUFFIX="patch"
-PATCHES=( "${WORKDIR}/asterisk-patchset" )
+PATCHES=( "${WORKDIR}/asterisk-patchset"
+)
 
 RDEPEND="dev-db/sqlite:3
 	dev-libs/popt
