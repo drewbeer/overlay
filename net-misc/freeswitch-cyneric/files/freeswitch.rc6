@@ -1,0 +1,49 @@
+!/sbin/runscript
+# Copyright 2007 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License, v2 or later
+# $Header: $
+
+FREESWITCH_BIN="${FREESWITCH_BIN:-/opt/freeswitch/bin/freeswitch}"
+
+# get instance id
+INSTANCE="$( cut -d '.' -f 2 <<< "${SVCNAME}" )";
+
+
+depend() {
+        need net
+        use dahdi
+}
+
+
+start() {
+        local OPTS
+
+        [ -n "${FREESWITCH_USER}" ] && \
+                OPTS="${OPTS} -u ${FREESWITCH_USER}"
+
+        [ -n "${FREESWITCH_GROUP}" ] && \
+                OPTS="${OPTS} -g ${FREESWITCH_GROUP}"
+
+        [ -n "${FREESWITCH_OPTS}" ] && \
+                OPTS="${OPTS} ${FREESWITCH_OPTS}"
+
+
+        ebegin "Starting Freeswitch instance ${INSTANCE}"
+        cd /opt/freeswitch/scripts/
+        start-stop-daemon --start --quiet --exec ${FREESWITCH_BIN} \
+                --pidfile /opt/freeswitch/log/${INSTANCE}/freeswitch.pid -- \
+                -conf /opt/freeswitch/conf/${INSTANCE} \
+                -log /opt/freeswitch/log/${INSTANCE} \
+                -db /opt/freeswitch/db/${INSTANCE} \
+                -nc ${OPTS}
+        eend $?
+}
+
+stop() {
+        ebegin "Stopping Freeswitch instance ${INSTANCE}"
+        start-stop-daemon --stop \
+                --signal SIGILL \
+                --retry 5 --quiet \
+                --pidfile /opt/freeswitch/log/${INSTANCE}/freeswitch.pid
+        eend $?
+}
