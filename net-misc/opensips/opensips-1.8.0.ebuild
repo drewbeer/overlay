@@ -13,7 +13,7 @@ SRC_URI="http://opensips.org/pub/opensips/${PV}/src/${MY_P}.tar.gz"
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="~x86 ~amd64"
-IUSE="debug ipv6 mysql postgres radius jabber ssl cpl unixodbc b2bua presence"
+IUSE="debug ipv6 mysql postgres radius jabber ssl cpl unixodbc b2bua presence xmlrpc"
 
 RDEPEND="
 	mysql? ( >=dev-db/mariadb-4.1.20 )
@@ -24,6 +24,7 @@ RDEPEND="
 	cpl? ( dev-libs/libxml2 )
 	b2bua? ( dev-libs/libxml2 )
 	presence? ( dev-libs/libxml2 )
+	xmlrpc? ( dev-libs/xmlrpc-c[abyss] )
 	unixodbc? ( >=dev-db/unixODBC-2.3.0 )"
 
 inc_mod=""
@@ -53,6 +54,9 @@ pkg_setup() {
 
 	use unixodbc && \
 		inc_mod="${inc_mod} db_unixodbc"
+
+	use xmlrpc  && \
+                inc_mod="${inc_mod} mi_xmlrpc"
 
 	export inc_mod
 }
