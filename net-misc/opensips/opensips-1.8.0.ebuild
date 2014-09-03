@@ -1,7 +1,7 @@
 # Copyright 1999-2005 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 # $Header$
-
+EAPI="2"
 inherit eutils
 
 DESCRIPTION="OpenSIPS - flexible and robust SIP (RFC3261) server"
