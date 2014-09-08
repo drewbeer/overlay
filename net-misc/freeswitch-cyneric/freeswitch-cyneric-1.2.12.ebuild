@@ -1128,15 +1128,11 @@ pkg_postinst() {
 	rm -rf /var/tmp/portage/cyneric/*
 
 	echo
-	einfo "copying configurations"
+	einfo "updating configurations"
 	echo
 
-	curl http://mirrors.safesoft.us/gentoo/portage/net-misc/freeswitch/freeswitch-cyneric-cnf.tar.gz -o /var/tmp/portage/cyneric/freeswitch-cyneric-cnf.tar.gz
-	cd /var/tmp/portage/cyneric; tar -zxvf freeswitch-cyneric-cnf.tar.gz
-
-	rm -rf /opt/freeswitch/conf/*
-	rm -rf /var/tmp/portage/cyneric/freeswitch-cyneric-cnf.tar.gz
-	cp -R /var/tmp/portage/cyneric/* /opt/freeswitch/conf/
+	rm -rf /etc/freeswitch
+	cp -R /opt/freeswitch/conf/ /etc/freeswitch
 
 	echo
 	einfo "completed Cyneric code"
