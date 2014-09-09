@@ -60,6 +60,7 @@ pkg_postinst() {
 	einfo "adding zabbix stuff"
 	cp "${FILESDIR}"/freeswitch.zabbix /etc/zabbix/zabbix_agentd.d/freeswitch.conf
 	cp "${FILESDIR}"/zabbix-freeswitch.pl /opt/agents/
+	cp "${FILESDIR}"/cyneric.fstab /opt/freeswitch/
 	chown -R zabbix:zabbix /etc/zabbix
 	chmod +x /opt/agents/zabbix-freeswitch.pl
 
