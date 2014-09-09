@@ -55,6 +55,14 @@ pkg_postinst() {
         newinitd "${FILESDIR}"/freeswitch.rc6   freeswitch
         newconfd "${FILESDIR}"/freeswitch.confd freeswitch
 
+	einfo ""
+
+	einfo "adding zabbix stuff"
+	cp "${FILESDIR}"/freeswitch.zabbix /etc/zabbix/zabbix_agentd.d/freeswitch.conf
+	cp "${FILESDIR}"/zabbix-freeswitch.pl /opt/agents/
+	chown -R zabbix:zabbix /etc/zabbix
+	chmod +x /opt/agents/zabbix-freeswitch.pl
+
         einfo ""
         einfo "cyneric install completed"
         
