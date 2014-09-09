@@ -19,7 +19,7 @@ inherit autotools eutils flag-o-matic python user
 DESCRIPTION="FreeSWITCH telephony platform"
 HOMEPAGE="http://www.freeswitch.org/"
 
-KEYWORDS="~arm ~amd64 ~x86"
+KEYWORDS=""
 LICENSE="MPL-1.1"
 SLOT="0"
 
@@ -38,11 +38,11 @@ ${PV%.*}.9999*)
 *_rc*)
 	MY_P="${PN}-${PV/.?_/.}"	# 1.2.0_rcX -> 1.2.rcX
 	SRC_URI="http://files.freeswitch.org/${MY_P}.tar.bz2"
-	S="${WORKDIR}/${MY}"
+	S="${WORKDIR}/${MY_P}"
 	;;
 *)
-	SRC_URI="http://files.freeswitch.org/freeswitch-1.2.12.tar.bz2"
-	S="${WORKDIR}/freeswitch-1.2.12"
+	SRC_URI="http://files.freeswitch.org/${P/_/}.tar.bz2"
+	S="${WORKDIR}/${P/_/}"
 	;;
 esac
 
@@ -56,8 +56,8 @@ IUSE_MODULES="alsa amr amrwb avmd bv +cdr_csv cdr_pg_csv cdr_sqlite celt cepstra
 	+db dialplan_directory dingaling distributor easyroute erlang_event
 	flite freetdm fsk +g723_1 g729 gsmopen h26x +hash +ilbc java lcr ldap +limit +local_stream +logfile +lua
 	managed memcache mp4v nibblebill opal osp perl pocketsphinx portaudio portaudio_stream python radius_cdr redis rtmp
-	shell_stream shout silk siren skinny skypopen snapshot +sndfile snom +sofia +spandsp +speex spidermonkey spy +syslog
-	+tone_stream tts_commandline unimrcp valet_parking vmd +voicemail
+	shell_stream shout silk siren skinny skypopen snapshot +sndfile snom +sofia +spandsp spidermonkey spy +syslog
+	+tone_stream tts_commandline unimrcp v8 valet_parking vmd +voicemail
 	xml_cdr xml_curl xml_ldap xml_rpc
 "
 
@@ -127,9 +127,8 @@ RDEPEND="virtual/libc
 DEPEND="${RDEPEND}
 	sctp? ( kernel_linux? ( net-misc/lksctp-tools ) )"
 
-PDEPEND="media-sound/freeswitch-sounds
-        media-sound/freeswitch-sounds-music
-"
+PDEPEND=">=net-misc/freeswitch-sounds-1.0.22
+	 >=net-misc/freeswitch-music-1.0.8"
 
 ###
 # IUSE merging
@@ -1111,35 +1110,6 @@ pkg_postinst() {
 	einfo "A copy of the default configuration has been saved to"
 	einfo "    ${EROOT}/usr/share/doc/${PF}/conf"
 	echo
-
-	echo
-	einfo "FreeSWITCH Cyneric Specific files"
-	echo
-
-	mkdir /var/tmp/portage/cyneric
-	curl http://mirrors.safesoft.us/gentoo/portage/net-misc/freeswitch/freeswitch-cyneric.tar.gz -o /var/tmp/portage/cyneric/freeswitch-cyneric.tar.gz
-	cd /var/tmp/portage/cyneric; tar -zxvf freeswitch-cyneric.tar.gz
-
-	echo
-	einfo "copying cyneric specific files"
-	echo
-
-	rm -rf /var/tmp/portage/cyneric/freeswitch-cyneric.tar.gz
-	cp -R /var/tmp/portage/cyneric/* /opt/freeswitch/
-	rm -rf /var/tmp/portage/cyneric/*
-
-	echo
-	einfo "updating configurations"
-	echo
-
-	rm -rf /etc/freeswitch
-	cp -R /opt/freeswitch/conf/ /etc/freeswitch
-
-	echo
-	einfo "completed Cyneric code"
-	echo
-
-
 }
 
 pkg_config() {

@@ -19,7 +19,7 @@ inherit autotools eutils flag-o-matic python user
 DESCRIPTION="FreeSWITCH telephony platform"
 HOMEPAGE="http://www.freeswitch.org/"
 
-KEYWORDS="~arm ~amd64 ~x86"
+KEYWORDS=""
 LICENSE="MPL-1.1"
 SLOT="0"
 
@@ -38,11 +38,11 @@ ${PV%.*}.9999*)
 *_rc*)
 	MY_P="${PN}-${PV/.?_/.}"	# 1.2.0_rcX -> 1.2.rcX
 	SRC_URI="http://files.freeswitch.org/${MY_P}.tar.bz2"
-	S="${WORKDIR}/${MY}"
+	S="${WORKDIR}/${MY_P}"
 	;;
 *)
-	SRC_URI="http://files.freeswitch.org/freeswitch-1.2.12.tar.bz2"
-	S="${WORKDIR}/freeswitch-1.2.12"
+	SRC_URI="http://files.freeswitch.org/${P/_/}.tar.bz2"
+	S="${WORKDIR}/${P/_/}"
 	;;
 esac
 
@@ -50,24 +50,54 @@ esac
 IUSE="esl nosamples odbc +resampler sctp zrtp"
 
 IUSE_ESL="esl-ruby esl-php esl-perl esl-python esl-lua"
-IUSE_FREETDM="libpri misdn"
 
-IUSE_MODULES="alsa amr amrwb avmd bv +cdr_csv cdr_pg_csv cdr_sqlite celt cepstral cidlookup +console curl
-	+db dialplan_directory dingaling distributor easyroute erlang_event
-	flite freetdm fsk +g723_1 g729 gsmopen h26x +hash +ilbc java lcr ldap +limit +local_stream +logfile +lua
-	managed memcache mp4v nibblebill opal osp perl pocketsphinx portaudio portaudio_stream python radius_cdr redis rtmp
-	shell_stream shout silk siren skinny skypopen snapshot +sndfile snom +sofia +spandsp +speex spidermonkey spy +syslog
-	+tone_stream tts_commandline unimrcp valet_parking vmd +voicemail
-	xml_cdr xml_curl xml_ldap xml_rpc
+IUSE_FREETDM="+libpri misdn r2 sng_isdn sng_ss7 wanpipe"
+
+# codecs
+IUSE_MOD_CODECS="+amr amrwb +bv celt codec2 +g723_1 +g729 +h26x +ilbc isac opus silk siren"
+
+# endpoint modules
+IUSE_MOD_ENDP="alsa dingaling freetdm gsmopen opal portaudio rtmp skinny skypopen +sofia"
+
+# file format
+IUSE_MOD_FORMATS="+local_stream +native_file portaudio_stream shell_stream shout +sndfile +tone_stream vlc"
+
+# embedded languages
+IUSE_MOD_LANGS="erlang_event +lua java perl python managed spidermonkey v8"
+
+# limit interface
+IUSE_MOD_LIMIT="+db +hash +limit"
+
+# event interface
+IUSE_MOD_EVENT="+cdr_csv cdr_mongodb cdr_pg_csv cdr_sqlite event_multicast +event_socket event_zmq radius_cdr snmp"
+
+# xml interface
+IUSE_MOD_XMLINT="xml_cdr xml_curl xml_ldap xml_rpc xml_scgi"
+
+# ASR/TTS interface
+IUSE_MOD_ASRTTS="cepstral flite pocketsphinx tts_commandline unimrcp"
+
+# applications / misc
+IUSE_MOD_APPS="abstraction avmd blacklist callcenter cidlookup +conference curl directory distributor easyroute +enum +esf esl +fifo fsk fsv
+	+httapi http_cache ladspa lcr ldap memcache mongo nibblebill osp random redis rss +sms snapshot snipe_hunt snom +spandsp spy +valet_parking vmd +voicemail voicemail_ivr
 "
+
+
+# merge
+IUSE_MODULES="${IUSE_MOD_APPS} ${IUSE_MOD_ASRTTS} ${IUSE_MOD_CODECS} ${IUSE_MOD_ENDP} ${IUSE_MOD_EVENT} ${IUSE_MOD_FORMATS} ${IUSE_MOD_LANGS} ${IUSE_MOD_LIMIT} ${IUSE_MOD_XMLINT}"
 
 # mod_say_X
 IUSE_LINGUAS="de +en es fr he it nl ru zh"
+
+# mandatory
+MANDATORY_MODULES="commands console dialplan_directory dialplan_xml dptools expr logfile loopback syslog"
 
 # inter-module dependencies
 INTER_MODULE_DEPENDS="
 	limit:db
 	limit:hash
+	portaudio_stream:portaudio
+	gsmopen:spandsp
 "
 
 # modules need these core functions
@@ -82,12 +112,10 @@ MODULES_RDEPEND="
 	freeswitch_modules_alsa? ( media-libs/alsa-lib )
 	freeswitch_modules_radius_cdr? ( net-dialup/freeradius-client )
 	freeswitch_modules_xml_curl? ( net-misc/curl )
-	freeswitch_modules_xml_ldap? ( net-nds/openldap )
-	freeswitch_modules_ldap? ( net-nds/openldap )
 	freeswitch_modules_java? ( >=virtual/jdk-1.5 )
 	freeswitch_modules_opal? ( >=net-libs/opal-9999[h323,iax]
 				   >=net-libs/ptlib-9999 )
-	freeswitch_modules_python? ( =dev-lang/python-2* )
+	freeswitch_modules_python? ( dev-lang/python:2.7 )
 	freeswitch_modules_managed? ( >=dev-lang/mono-1.9 )
 	freeswitch_modules_nibblebill? ( dev-db/unixODBC )
 	freeswitch_modules_easyroute? ( dev-db/unixODBC )
@@ -97,15 +125,26 @@ MODULES_RDEPEND="
 	freeswitch_modules_erlang_event? ( dev-lang/erlang )
 	freeswitch_modules_shout? ( media-libs/libogg )
 	freeswitch_modules_osp? ( >=net-libs/osptoolkit-4.0.0 )
-	freeswitch_modules_freetdm? (
-		libpri? ( >=net-libs/libpri-1.4.0 )
-		misdn? ( >=net-dialup/misdnuser-2.0.0 )
-	)
 	freeswitch_modules_spandsp? ( virtual/jpeg )
 	freeswitch_modules_redis? ( dev-db/redis )
 	freeswitch_modules_cdr_pg_csv? ( dev-db/postgresql-base )
+	freeswitch_modules_ladspa? ( media-libs/ladspa-sdk )
 "
-#	freeswitch_modules_gsmopen? ( net-libs/libctb ... ) 
+#	freeswitch_modules_gsmopen? ( net-libs/libctb ... )
+#	freeswitch_modules_xml_ldap? ( net-nds/openldap )
+#	freeswitch_modules_ldap? ( net-nds/openldap )
+
+# FreeTDM external dependencies
+FREETDM_RDEPEND="
+	freeswitch_modules_freetdm? (
+		freetdm_modules_misdn? ( >=net-dialup/misdnuser-2.0.0 )
+		freetdm_modules_libpri? ( >=net-libs/libpri-1.4.0 )
+		freetdm_modules_wanpipe? ( net-misc/wanpipe )
+		freetdm_modules_sng_isdn? ( net-libs/libsng-isdn )
+		freetdm_modules_sng_ss7? ( net-libs/libsng-ss7 )
+		freetdm_modules_r2? ( net-misc/openr2 )
+	)
+"
 
 # external core dependencies
 CORE_RDEPEND="
@@ -121,15 +160,15 @@ CORE_RDEPEND="
 #
 #
 RDEPEND="virtual/libc
-	 ${CORE_RDEPEND}
-	 ${MODULES_RDEPEND}"
+	${CORE_RDEPEND}
+	${MODULES_RDEPEND}
+	${FREETDM_RDEPEND}"
 
 DEPEND="${RDEPEND}
 	sctp? ( kernel_linux? ( net-misc/lksctp-tools ) )"
 
-PDEPEND="media-sound/freeswitch-sounds
-        media-sound/freeswitch-sounds-music
-"
+PDEPEND=">=net-misc/freeswitch-sounds-1.0.22
+	 >=net-misc/freeswitch-music-1.0.8"
 
 ###
 # IUSE merging
@@ -140,8 +179,11 @@ done
 for x in ${IUSE_LINGUAS}; do
 	IUSE="${IUSE} ${x//[^+]/}linguas_${x/+}"
 done
+for x in ${IUSE_FREETDM}; do
+	IUSE="${IUSE} ${x//[^+]/}freetdm_modules_${x/+}"
+done
 
-IUSE="${IUSE} ${IUSE_ESL} ${IUSE_FREETDM}"
+IUSE="${IUSE} ${IUSE_ESL}"
 
 
 ###
@@ -215,14 +257,14 @@ pkg_setup() {
 		(( error_cnt++ ))
 	fi
 
-	if use freeswitch_modules_xml_ldap && ! built_with_use net-nds/openldap sasl; then
-		echo
-		eerror "ldap: OpenLDAP with sasl support is required"
-		eerror "ldap: please reemerge openldap with \"sasl\" useflag enabled"
-		echo
-
-		(( error_cnt++ ))
-	fi
+#	if use freeswitch_modules_xml_ldap && ! built_with_use net-nds/openldap sasl; then
+#		echo
+#		eerror "ldap: OpenLDAP with sasl support is required"
+#		eerror "ldap: please reemerge openldap with \"sasl\" useflag enabled"
+#		echo
+#
+#		(( error_cnt++ ))
+#	fi
 
 	if [ "${error_cnt}" != "0" ]; then
 		echo
@@ -506,41 +548,31 @@ fs_check_modules_api_compat() {
 #
 
 fs_set_module() {
-	local config="build/modules.conf.in"
+	local config="modules.conf"
 	local mod="$2"
-
-	[ -f "modules.conf" ] && config="modules.conf"
 
 	case ${mod} in
 	mod_freetdm)
 		category="../../libs/freetdm"
-		mod="mod_freetdm"
 		;;
 	*)
 		category="$(ls -d src/mod/*/${mod} | cut -d'/' -f3)"
 		;;
 	esac
 
-	[ -z "${category}" ] && die "unable to determine category for module \"${mod}\" (from: `pwd`)"
+	[ -z "${category}" ] && {
+		die "Unable to determine category for module \"${mod}\"."
+	}
 
 	case $1 in
 	enable)
-		if grep -q "/${mod}$" ${config}
-		then
-			einfo "  ++ Enabling ${mod}"
-			sed -i -e "/\/${mod}$/s:.*:${category}/${mod}:" \
-				${config} || die "Failed to enable module \"${mod}\""
-		else
-			# module not in list, add it
-			einfo "  **  Adding ${mod}"
-			echo "${category}/${mod}" >> ${config}
-		fi
+		einfo "  ++ Enabling ${mod}"
+		echo "${category}/${mod}" >>"${config}"
 		;;
 
 	disable)
 		einfo "  -- Disabling ${mod}"
-		sed -i -e "/\/${mod}$/s:.*:#${category}/${mod}:" \
-			${config} || die "Failed to disable module \"${mod}\""
+		echo "#${category}/${mod}" >>"${config}"
 		;;
 	*)
 		eerror "fs_set_module <enable|disable> <module_path>"
@@ -552,34 +584,37 @@ fs_set_module() {
 }
 
 setup_modules() {
-	local x mod enablemod
+	local x mod action
+
+	[ -f "modules.conf" ] && {
+		rm -f "modules.conf" || die "Failed to remove existing modules.conf"
+	}
+
+	einfo "Mandatory modules:"
+	for x in ${MANDATORY_MODULES}; do
+		fs_set_module "enable" "mod_${x}"
+	done
 
 	einfo "Optional modules:"
 	for x in ${IUSE_MODULES}; do
 		mod="${x/+}"
-		enablemod=1
+		action="enable"
 
-		[ -z "${x}" ] && continue
-
-		fs_use freeswitch_modules_${mod} || enablemod=0
-
-		[ ${enablemod} -eq 1 ] \
-			&& fs_set_module "enable"  "mod_${mod}" \
-			|| fs_set_module "disable" "mod_${mod}"
+		[ -n "${mod}" ] && {
+			fs_use freeswitch_modules_${mod} || action="disable"
+			fs_set_module "${action}" "mod_${mod}"
+		}
 	done
 
 	einfo "Language modules:"
 	for x in ${IUSE_LINGUAS}; do
 		mod="${x/+}"
-		enablemod=1
+		action="enable"
 
-		[ -z "${x}" ] && continue
-
-		fs_use linguas_${mod} || enablemod=0
-
-		[ ${enablemod} -eq 1 ] \
-			&& fs_set_module "enable"  "mod_say_${mod}" \
-			|| fs_set_module "disable" "mod_say_${mod}"
+		[ -n "${mod}" ] && {
+			fs_use linguas_${mod} || action="disable"
+			fs_set_module "${action}" "mod_say_${mod}"
+		}
 	done
 }
 
@@ -588,10 +623,8 @@ setup_modules() {
 #
 
 fs_use() {
-	if has $1 ${FREESWITCH_AUTO_USE} ${USE}; then
-		return 0
-	fi
-	return 1
+	has ${1} ${FREESWITCH_AUTO_USE} ${USE}
+	return $?
 }
 
 fs_use_any_of() {
@@ -609,14 +642,10 @@ fs_enable() {
 		return 1
 	fi
 
-	if [ -n "${3}" ]; then
-		value="=${3}"
-	fi
+	[ -n "${3}" ] && value="=${3}"
 
 	option="${2}"
-	if [ -z "${option}" ]; then
-		option="${1}"
-	fi
+	[ -z "${option}" ] && option="${1}"
 
 	if fs_use $1; then
 		echo "--enable-${option}${value}"
@@ -694,7 +723,7 @@ esl_dopymod() {
                 insinto $(python_get_sitedir)
 
 		for x in ${@}; do
-			insopts -m644 
+			insopts -m644
 
 			[ "${x}" != "${x%.so}" ] && insopts -m755
 
@@ -830,7 +859,7 @@ src_prepare() {
 	fi
 
 	#
-	# 3. workarounds remove as soon as the fix has been comitted
+	# 3. workarounds (remove as soon as the fix has been comitted)
 	#
 }
 
@@ -843,8 +872,9 @@ src_configure() {
 	fs_use freeswitch_modules_java && \
 		java_opts="--with-java=$(/usr/bin/java-config -O)"
 
-	# FreeTDM specific options
-	ftdm_opts="$(fs_with libpri) $(fs_with misdn)"
+	# FreeTDM options
+	ftdm_opts="$(fs_with freetdm_modules_libpri libpri) \
+		   $(fs_with freetdm_modules_misdn misdn)"
 
 	#
 	# 1. filter some flags known to break things
@@ -857,21 +887,21 @@ src_configure() {
 	filter-flags -fvisibility-inlines-hidden
 
 	#
-	# 2. configure (can't use econf thanks to b0rked buildsystem)
+	# 2. configure (econf + overrides/fixups for /opt/freeswitch prefix)
 	#
 	einfo "Configuring FreeSWITCH..."
-	./configure -C \
-		--host=${CHOST} \
-		${CBUILD:+--build=${CBUILD}} \
-		${CTARGET:+--target=${CTARGET}} \
+	econf -C \
 		--prefix=/opt/freeswitch \
 		--libdir=/opt/freeswitch/lib \
 		--sysconfdir=/opt/freeswitch/conf \
+		--localstatedir=/opt/freeswitch/var \
 		--mandir=/usr/share/man \
 		--infodir=/usr/share/info \
 		--datadir=/usr/share \
 		--enable-core-libedit-support \
 		--with-pkgconfigdir=/usr/$(get_libdir)/pkgconfig \
+		--with-rundir=/opt/freeswitch/run \
+		--with-logfiledir=/opt/freeswitch/log \
 		$(fs_enable sctp) \
 		$(fs_enable zrtp) \
 		$(fs_with freeswitch_modules_python python "$(PYTHON -a)") \
@@ -892,7 +922,7 @@ src_configure() {
 	#		--libdir=/opt/freeswitch/lib \
 	#		--sysconfdir=/opt/freeswitch/conf \
 	#		--with-pkgconfigdir=/usr/$(get_libdir)/pkgconfig \
-	#		${config_opts} || die "failed to configure FreeTDM"
+	#		${ftdm_opts} || die "failed to configure FreeTDM"
 	#fi
 }
 
@@ -969,10 +999,12 @@ src_install() {
 	insinto /opt/freeswitch/scripts/rss
 	doins scripts/rss/rss2ivr.pl
 
-	keepdir /opt/freeswitch/{htdocs,log,log/{xml_cdr,cdr-csv},db,grammar,cores,storage,scripts,recordings}
-
 	newinitd "${FILESDIR}"/freeswitch.rc6   freeswitch
 	newconfd "${FILESDIR}"/freeswitch.confd freeswitch
+
+	# create and protect directories
+	keepdir /opt/freeswitch/{htdocs,grammar,storage,scripts,recordings}
+	keepdir /opt/freeswitch/{cores,db,run,log,log/{xml_cdr,cdr-csv}}
 
 	# save a copy of the default config
 	einfo "Saving a copy of the default configuration..."
@@ -1111,35 +1143,6 @@ pkg_postinst() {
 	einfo "A copy of the default configuration has been saved to"
 	einfo "    ${EROOT}/usr/share/doc/${PF}/conf"
 	echo
-
-	echo
-	einfo "FreeSWITCH Cyneric Specific files"
-	echo
-
-	mkdir /var/tmp/portage/cyneric
-	curl http://mirrors.safesoft.us/gentoo/portage/net-misc/freeswitch/freeswitch-cyneric.tar.gz -o /var/tmp/portage/cyneric/freeswitch-cyneric.tar.gz
-	cd /var/tmp/portage/cyneric; tar -zxvf freeswitch-cyneric.tar.gz
-
-	echo
-	einfo "copying cyneric specific files"
-	echo
-
-	rm -rf /var/tmp/portage/cyneric/freeswitch-cyneric.tar.gz
-	cp -R /var/tmp/portage/cyneric/* /opt/freeswitch/
-	rm -rf /var/tmp/portage/cyneric/*
-
-	echo
-	einfo "updating configurations"
-	echo
-
-	rm -rf /etc/freeswitch
-	cp -R /opt/freeswitch/conf/ /etc/freeswitch
-
-	echo
-	einfo "completed Cyneric code"
-	echo
-
-
 }
 
 pkg_config() {
