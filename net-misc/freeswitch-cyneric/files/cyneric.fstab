@@ -1,0 +1,20 @@
+# freeswitch
+/dev/xvdb   /opt/freeswitch            ext4    noatime              0 1
+
+tmpfs            /opt/freeswitch/db/a               tmpfs   size=10m,mode=0755     0       0
+tmpfs            /opt/freeswitch/log/a/cdr-csv  tmpfs   size=10m,mode=0755     0       0
+
+tmpfs            /opt/freeswitch/db/b               tmpfs   size=10m,mode=0755     0       0
+tmpfs            /opt/freeswitch/log/b/cdr-csv  tmpfs   size=10m,mode=0755     0       0
+
+tmpfs            /opt/freeswitch/db/c               tmpfs   size=10m,mode=0755     0       0
+tmpfs            /opt/freeswitch/log/c/cdr-csv  tmpfs   size=10m,mode=0755     0       0
+
+tmpfs            /opt/freeswitch/db/d               tmpfs   size=10m,mode=0755     0       0
+tmpfs            /opt/freeswitch/log/d/cdr-csv  tmpfs   size=10m,mode=0755     0       0
+
+tmpfs            /opt/freeswitch/db/e               tmpfs   size=10m,mode=0755     0       0
+tmpfs            /opt/freeswitch/log/e/cdr-csv  tmpfs   size=10m,mode=0755     0       0
+
+tmpfs            /opt/freeswitch/db/f               tmpfs   size=10m,mode=0755     0       0
+tmpfs            /opt/freeswitch/log/f/cdr-csv  tmpfs   size=10m,mode=0755     0       0

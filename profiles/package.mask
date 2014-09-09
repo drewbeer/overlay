@@ -1,5 +1,0 @@
-#
-# Experimental version,
-# masked for now
-#
->=net-misc/freeswitch-9999-r1
