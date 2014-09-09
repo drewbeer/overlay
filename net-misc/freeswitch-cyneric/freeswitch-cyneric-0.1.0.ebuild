@@ -23,10 +23,11 @@ DEPEND="${RDEPEND}"
 
 pkg_preinst() {
         einfo "removing freeswitch configs"
-				rm -rf /opt/freeswitch/conf
-				rm -rf /etc/freeswitch
+	rm -rf /opt/freeswitch/conf
+	rm -rf /etc/freeswitch
+	rm -rf /opt/freeswitch/log
 
-				einfo "installing new cyneric files"
+	einfo "installing new cyneric files"
 
         cd ${WORKDIR}
         cp -R * /opt/freeswitch/
@@ -40,8 +41,6 @@ pkg_preinst() {
         
         cp "${FILESDIR}"/cyneric.cron /etc/cron.d/
         
-        cp "${FILESDIR}"/cyneric.fstab /etc/cron.d/
-
 }
 
 pkg_postinst() {
