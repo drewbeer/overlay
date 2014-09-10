@@ -16,7 +16,8 @@ RESTRICT="mirror"
 SRC_URI="http://mirrors.safesoft.us/gentoo/portage/net-misc/freeswitch/${P}.tar.gz"
 
 RDEPEND="dev-java/oracle-jdk-bin
-        net-misc/freeswitch"
+        net-misc/freeswitch
+	net-analyzer/netcat"
 
 DEPEND="${RDEPEND}"
 
