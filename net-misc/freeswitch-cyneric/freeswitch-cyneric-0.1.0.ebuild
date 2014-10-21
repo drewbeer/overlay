@@ -13,7 +13,7 @@ SLOT="0"
 LICENSE=""
 IUSE=""
 RESTRICT="mirror"
-SRC_URI="http://mirrors.safesoft.us/gentoo/portage/net-misc/freeswitch/${P}.tar.gz"
+SRC_URI="http://mirrors.safesoft.us/gentoo/portage/net-misc/cyneric/${P}.tar.gz"
 
 RDEPEND="dev-java/oracle-jdk-bin
         net-misc/freeswitch
