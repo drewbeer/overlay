@@ -35,13 +35,7 @@ pkg_postinst() {
         elog "updating init scripts"
         einfo ""
 
-        newinitd "${FILESDIR}"/cdrprocessor.1	cdrprocessor.1
-        newinitd "${FILESDIR}"/cdrprocessor.2	cdrprocessor.2
-        newinitd "${FILESDIR}"/cdrprocessor.3	cdrprocessor.3
-        newinitd "${FILESDIR}"/cdrprocessor.4	cdrprocessor.4
-        newinitd "${FILESDIR}"/cdrprocessor.5	cdrprocessor.5
-        newinitd "${FILESDIR}"/cdrprocessor.6	cdrprocessor.6
-        newinitd "${FILESDIR}"/cdrprocessor.in	cdrprocessor.in
+        cp "${FILESDIR}"/* /etc/init.d/
 
 	einfo ""
         einfo "cyneric cdr install completed"
