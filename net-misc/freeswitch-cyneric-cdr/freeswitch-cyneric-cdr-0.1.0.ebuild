@@ -27,7 +27,7 @@ pkg_preinst() {
         cd ${WORKDIR}
 	mkdir -p /opt/cyneric
         cp -R * /opt/cyneric/
-
+	chown -R cyneric:cyneric /opt/cyneric
 }
 
 pkg_postinst() {
