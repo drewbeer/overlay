@@ -25,6 +25,7 @@ pkg_preinst() {
 	einfo "installing new cyneric files"
 
         cd ${WORKDIR}
+	mkdir -p /opt/cyneric
         cp -R * /opt/cyneric/
 
 }
