@@ -4,20 +4,23 @@
 EAPI="3"
 inherit eutils
 
-MAGIC="42f6d89"
+MAGIC="41408f0"
 
 DESCRIPTION="OpenSIPS - flexible and robust SIP (RFC3261) server"
 HOMEPAGE="http://www.opensips.org/"
 MY_P="${P}-${MAGIC}_src"
 P2="${P}-tls"
+
 SRC_URI="http://opensips.org/pub/opensips/${PV}/src/${MY_P}.tar.gz"
 
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="~x86 ~amd64"
-IUSE="debug ipv6 mysql postgres radius jabber ssl cpl unixodbc b2bua presence xmlrpc"
+IUSE="debug ipv6 mysql postgres radius jabber ssl cpl unixodbc b2bua presence xmlrpc httpd json"
 
 RDEPEND="
+        json? ( dev-libs/json-c )
+        httpd? ( =net-libs/libmicrohttpd-0.9.22 )
 	mysql? ( >=dev-db/mariadb-4.1.20 )
 	radius? ( >=net-dialup/radiusclient-ng-0.5.0 )
 	postgres? ( >=dev-db/postgresql-8.0.8 )
@@ -33,6 +36,12 @@ inc_mod=""
 make_options=""
 
 pkg_setup() {
+        use json && \
+                inc_mod="${inc_mod} json"
+
+        use httpd && \
+                inc_mod="${inc_mod} httpd"
+
 	use mysql && \
 		inc_mod="${inc_mod} db_mysql"
 
@@ -58,7 +67,7 @@ pkg_setup() {
 		inc_mod="${inc_mod} db_unixodbc"
 
 	use xmlrpc  && \
-                inc_mod="${inc_mod} mi_xmlrpc"
+                inc_mod="${inc_mod} mi_xmlrpc mi_xmlrpc_ng"
 
 	export inc_mod
 }
