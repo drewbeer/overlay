@@ -4,7 +4,7 @@
 EAPI="3"
 inherit eutils
 
-MAGIC="41408f0"
+MAGIC="latest"
 
 DESCRIPTION="OpenSIPS - flexible and robust SIP (RFC3261) server"
 HOMEPAGE="http://www.opensips.org/"
