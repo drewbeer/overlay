@@ -1,0 +1,42 @@
+#!/sbin/runscript
+# Copyright (C) 2013-2014 Jonathan Vasquez <fearedbliss@funtoo.org>
+# Copyright (C) 2014 Sandy McArthur <Sandy@McArthur.org>
+# Distributed under the terms of the Simplified BSD License.
+
+depend() {
+	need localmount net
+	after bootmisc
+}
+
+start() {
+	ebegin "Starting ${NAME}"
+
+	mkdir -p $(dirname ${SYNC_PIDFILE})
+	chown ${BTSYNC_USER}:${BTSYNC_GROUP} $(dirname ${SYNC_PIDFILE})
+
+	start-stop-daemon \
+	   --start \
+	   --user "${BTSYNC_USER}" \
+	   --group "${BTSYNC_GROUP}" \
+	   --nice 5 \
+	   --ionice 3 \
+	   --exec "${SYNC_BINARY}" \
+	   -- ${SYNC_OPTS}
+
+	eend $?
+}
+
+stop() {
+	ebegin "Stopping ${NAME}"
+
+	start-stop-daemon \
+	   --stop \
+	   --user "${BTSYNC_USER}" \
+	   --group "${BTSYNC_GROUP}" \
+	   --exec "${SYNC_BINARY}" \
+	   --wait 5000 \
+	   --retry SIGTERM/5 
+
+	eend $?
+}
+
