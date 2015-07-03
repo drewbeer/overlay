@@ -35,9 +35,9 @@ pkg_preinst() {
 	rpm2targz NetBorderCallAnalyzerSetup2.xLinux_2.0.6.rpm
 	# ar x ${DISTDIR}/${A}
         mkdir data
-        mkdir data/sangoma
 	tar -xzf *.tar.gz -C data
-	mv data/Sangoma_NetBorderCallAnalyzer data/sangoma/
+        mkdir data/opt/sangoma
+	mv data/opt/Sangoma_NetBorderCallAnalyzer data/opt/sangoma/
 
 	einfo "updating init script"
 	# replace debian specific init scripts with gentoo specific ones
