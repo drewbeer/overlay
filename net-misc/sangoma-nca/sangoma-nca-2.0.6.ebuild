@@ -37,7 +37,7 @@ pkg_preinst() {
         mkdir data
 	tar -xzf *.tar.gz -C data
         mkdir data/opt/sangoma
-	mv data/opt/Sangoma_NetBorderCallAnalyzer data/opt/sangoma/
+	mv data/opt/Sangoma_NetBorderCallAnalyzer data/opt/sangoma/nbca
 
 	einfo "updating init script"
 	# replace debian specific init scripts with gentoo specific ones
