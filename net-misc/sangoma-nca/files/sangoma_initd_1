@@ -13,7 +13,7 @@
 # source function library
 #. /etc/rc.d/init.d/functions
 
-INSTDIR=/opt/Sangoma_NetBorderCallAnalyzer
+INSTDIR=/opt/sangoma/Sangoma_NetBorderCallAnalyzer
 
 #add our /lib to .so search path
 export LD_LIBRARY_PATH=$INSTDIR/lib:$LD_LIBRARY_PATH
