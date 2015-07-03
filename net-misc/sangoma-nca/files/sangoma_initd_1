@@ -1,0 +1,168 @@
+#!/bin/bash
+#
+# Init file for Netborder Call Analyzer
+#
+# run levels: 2-5, start priority 95, stop priority 5
+#
+# chkconfig: 2345 95 5
+# description: Sangoma NetBorder Call Analyzer
+#
+# pidfile: /var/run/netborder-call-analyzer-service.pid
+# pidfile: /var/run/netborder-call-analyzer-engine.pid
+
+# source function library
+#. /etc/rc.d/init.d/functions
+
+INSTDIR=/opt/Sangoma_NetBorderCallAnalyzer
+
+#add our /lib to .so search path
+export LD_LIBRARY_PATH=$INSTDIR/lib:$LD_LIBRARY_PATH
+
+NCA_COMMON_OPTIONS="--start-service --putenv PARAXIP=$INSTDIR --putenv PARAXIP_BINDIR=$INSTDIR/bin --putenv PARAXIP_BRAND=netborder --putenv PARAXIP_INSTALLDIR=$INSTDIR --putenv PARAXIP_PLATFORM=x86_64-linux"
+
+# main service ("SIP hub")
+NCA_MAIN_SERVICE_NAME=netborder-call-analyzer-service
+NCA_MAIN_SERVICE_FULL_PATH=$INSTDIR/bin/$NCA_MAIN_SERVICE_NAME
+
+NCA_MAIN_SERVICE_OPTIONS="$NCA_COMMON_OPTIONS --global-config $INSTDIR/config/call-analyzer-logging.properties --global-config $INSTDIR/config/call-analyzer-service.properties"
+  
+# engine process
+NCA_ENGINE_NAME=netborder-call-analyzer-engine
+NCA_ENGINE_FULL_PATH=$INSTDIR/bin/$NCA_ENGINE_NAME
+
+export LOGNAME=$NCA_ENGINE_NAME
+
+NCA_ENGINE_OPTIONS="$NCA_COMMON_OPTIONS --global-config $INSTDIR/config/call-analyzer-engine-logging.properties --global-config $INSTDIR/config/call-analyzer-engine.properties"
+
+# Sets process priority to 'Realtime' (Highest priority available)
+# use as prefix before lauching the application
+PRIO_RT="chrt -r 99"
+
+RETVAL=0
+
+# arg 1: service process name
+# arg 2: cmd-line to launch service
+start()
+{
+  nca_service_pid=`pidof $1`
+  if [ ! -z "$nca_service_pid" ]
+  then
+    echo "Service $1 is already started"
+    #failure
+    exit 1
+  fi
+
+  # Check if effective user ID is superuser (bug 4523)
+  if [ "$EUID" != 0 ]; then
+    echo -n "Service must be started by user with root privileges"
+    #failure
+    exit 1
+  fi
+
+  echo -n $"Starting $1"
+  
+  # Setting wd to the installtion dir (some paths in config files are relative to it)
+  cd ${INSTDIR}
+  # arg 2 is cmd-line to launch service
+  $2 &> ${INSTDIR}/logs/stderr/$1.log
+
+  RETVAL=$?
+  [ "$RETVAL" = 0 ] && touch /var/lock/$1
+
+  # Only end the routine if we stop seeing the process (failure) or the pid file
+  # is created (success). If the pid file is never created by the app this script will
+  # hang forever (or more likely until the user stops us)
+  while true
+  do
+    nca_service_pid=`pidof $1`
+    if [ -z "$nca_service_pid" ]
+    then
+      rm -f /var/lock/$1
+      #failure
+      echo
+      echo "failure"
+      exit 1
+    fi
+    if [ -f /var/run/$1.pid ]
+    then
+      #success
+      echo
+      echo  "success"
+      break
+    fi
+    sleep 0.5
+  done
+}
+
+# arg 1: service name
+stop()
+{
+  nca_service_pid=`pidof $1`
+  if [ -z "$nca_service_pid" ]
+  then
+    echo -n "Service $1 is not started"
+    #failure
+    echo 
+    exit 1
+  fi
+
+  # Check if effective user ID is superuser (bug 4523)
+  if [ "$EUID" != 0 ]; then
+    echo -n "Service must be stopped by user with root privileges"
+    #failure
+    echo
+    exit 1
+  fi
+
+  echo -n $"Stopping $1"
+
+  # -15 is TERM
+  kill -15 $nca_service_pid
+  # Only end the routine if we stop seeing the process or the pid file
+  # is deleted. If the pid file is never deleted by the app this script will
+  # hang forever (or more likely until the user stops us)
+  while true
+  do
+    nca_service_pid=`pidof $1`
+    if [ -z "$nca_service_pid" ]
+    then
+      #success
+      break
+    fi
+    if [ ! -f /var/run/$1.pid ]
+    then
+      #success
+      break
+    fi
+   sleep 0.5
+  done
+  RETVAL=$?
+  [ "$RETVAL" = 0 ] && rm -f /var/lock/$1
+  echo 
+}
+
+case "$1" in
+
+	start)
+		start $NCA_MAIN_SERVICE_NAME "$NCA_MAIN_SERVICE_FULL_PATH $NCA_MAIN_SERVICE_OPTIONS"
+		start $NCA_ENGINE_NAME "$PRIO_RT $NCA_ENGINE_FULL_PATH $NCA_ENGINE_OPTIONS"
+		;;
+
+	stop)
+		stop $NCA_MAIN_SERVICE_NAME
+		stop $NCA_ENGINE_NAME
+		;;
+
+	status)
+		status $NCA_MAIN_SERVICE_NAME
+		status $NCA_ENGINE_NAME
+		RETVAL=$?
+		;;
+
+	*)
+		echo $"Usage: $0 {start|stop|status}"
+		RETVAL=1
+
+esac
+exit $RETVAL
+
