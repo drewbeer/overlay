@@ -1,0 +1,33 @@
+# cyneric log rotation stuff
+# m h  dom mon dow   command
+#01,05,10,15,20,25,30,35,40,45,50,55 * * * *  root /opt/freeswitch/scripts/FSLogRotate.pl > /dev/null 2>&1
+
+# disk space
+#01,05,10,15,20,25,30,35,40,45,50,55 * * * *  root /opt/freeswitch/scripts/freeswitch.df.pl > /dev/null 2>&1
+
+# crontab sync
+#* *    * * *    root    /usr/bin/screen -d -m -S crontab_sync /usr/bin/ionice -c3 /usr/bin/nice -n 19 /usr/local/sbin/crontab_sync.php > /dev/null 2>&1
+
+# delete old log files
+#10 1   * * *   root    find /opt/freeswitch/log/a/comprimidos  -type f -name "*.tar.gz*" -mtime +2 -exec rm {} \; 2>/dev/null
+#10 1   * * *   root    find /opt/freeswitch/log/b/comprimidos  -type f -name "*.tar.gz*" -mtime +2 -exec rm {} \; 2>/dev/null
+#10 1   * * *   root    find /opt/freeswitch/log/c/comprimidos  -type f -name "*.tar.gz*" -mtime +2 -exec rm {} \; 2>/dev/null
+#10 1   * * *   root    find /opt/freeswitch/log/d/comprimidos  -type f -name "*.tar.gz*" -mtime +2 -exec rm {} \; 2>/dev/null
+#10 1   * * *   root    find /opt/freeswitch/log/e/comprimidos  -type f -name "*.tar.gz*" -mtime +2 -exec rm {} \; 2>/dev/null
+#10 1   * * *   root    find /opt/freeswitch/log/f/comprimidos  -type f -name "*.tar.gz*" -mtime +2 -exec rm {} \; 2>/dev/null
+
+# backup cdr records
+#10 1    * * *   root    find /opt/freeswitch/log/a/archivos -mtime +7 -type f -name "*.csv*" -exec gzip -9 {} \; -exec mv {}.gz /freeswitch_logs/`hostname`/instance_a \; 2>/dev/null
+#10 1    * * *   root    find /opt/freeswitch/log/b/archivos -mtime +7 -type f -name "*.csv*" -exec gzip -9 {} \; -exec mv {}.gz /freeswitch_logs/`hostname`/instance_b \; 2>/dev/null
+#10 1    * * *   root    find /opt/freeswitch/log/c/archivos -mtime +7 -type f -name "*.csv*" -exec gzip -9 {} \; -exec mv {}.gz /freeswitch_logs/`hostname`/instance_c \; 2>/dev/null
+#10 1    * * *   root    find /opt/freeswitch/log/d/archivos -mtime +7 -type f -name "*.csv*" -exec gzip -9 {} \; -exec mv {}.gz /freeswitch_logs/`hostname`/instance_d \; 2>/dev/null
+#10 1    * * *   root    find /opt/freeswitch/log/e/archivos -mtime +7 -type f -name "*.csv*" -exec gzip -9 {} \; -exec mv {}.gz /freeswitch_logs/`hostname`/instance_e \; 2>/dev/null
+#10 1    * * *   root    find /opt/freeswitch/log/f/archivos -mtime +7 -type f -name "*.csv*" -exec gzip -9 {} \; -exec mv {}.gz /freeswitch_logs/`hostname`/instance_f \; 2>/dev/null
+
+# moved left over records
+#10 *    * * *   root    find /opt/freeswitch/log/a/archivos -mtime +2 -type f -name "*.gz*" -exec mv {} /freeswitch_logs/`hostname`/instance_a \; 2>/dev/null
+#10 *    * * *   root    find /opt/freeswitch/log/b/archivos -mtime +2 -type f -name "*.gz*" -exec mv {} /freeswitch_logs/`hostname`/instance_b \; 2>/dev/null
+#10 *    * * *   root    find /opt/freeswitch/log/c/archivos -mtime +2 -type f -name "*.gz*" -exec mv {} /freeswitch_logs/`hostname`/instance_c \; 2>/dev/null
+#10 *    * * *   root    find /opt/freeswitch/log/d/archivos -mtime +2 -type f -name "*.gz*" -exec mv {} /freeswitch_logs/`hostname`/instance_d \; 2>/dev/null
+#10 *    * * *   root    find /opt/freeswitch/log/e/archivos -mtime +2 -type f -name "*.gz*" -exec mv {} /freeswitch_logs/`hostname`/instance_e \; 2>/dev/null
+#10 *    * * *   root    find /opt/freeswitch/log/f/archivos -mtime +2 -type f -name "*.gz*" -exec mv {} /freeswitch_logs/`hostname`/instance_f \; 2>/dev/null

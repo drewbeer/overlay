@@ -1,0 +1,26 @@
+--- wanpipe-3.5.27/patches/kdrivers/include/linux/wanpipe_includes.h.orig	2012-05-27 12:07:15.759583006 +0200
++++ wanpipe-3.5.27/patches/kdrivers/include/linux/wanpipe_includes.h	2012-05-27 12:12:18.407547079 +0200
+@@ -270,7 +270,9 @@
+ #  include <linux/netdevice.h>
+ #  include <linux/list.h>
+ #  include <asm/io.h>		/* phys_to_virt() */
+-#  include <asm/system.h>
++#  if LINUX_VERSION_CODE < KERNEL_VERSION(3,4,0)
++#   include <asm/system.h>
++#  endif
+ #  include <asm/byteorder.h>
+ #  include <asm/delay.h>
+ #  include <linux/pci.h>
+--- wanpipe-3.5.27/patches/kdrivers/include/linux/wanpipe.h.orig	2012-05-27 12:23:15.293853683 +0200
++++ wanpipe-3.5.27/patches/kdrivers/include/linux/wanpipe.h	2012-05-27 12:27:02.704183860 +0200
+@@ -219,7 +219,9 @@
+ 
+ # if defined(LINUX_2_4) || defined(LINUX_2_6)
+ #  include <linux/serial.h>
+-#  include <linux/serialP.h>
++#  if LINUX_VERSION_CODE < KERNEL_VERSION(3,4,0)
++#   include <linux/serialP.h>
++#  endif
+ #  include <linux/serial_reg.h>
+ #  include <asm/serial.h>
+ # endif

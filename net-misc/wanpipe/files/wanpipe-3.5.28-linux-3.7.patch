@@ -1,0 +1,14 @@
+--- wanpipe-3.5.28/patches/kdrivers/include/wanpipe_kernel.h	2013-01-06 15:30:21.936769374 +0100
++++ wanpipe-3.5.28/patches/kdrivers/include/wanpipe_kernel.h	2013-01-06 15:33:58.821779305 +0100
+@@ -53,6 +53,11 @@
+ # define wan_rwlock_init(lock)  *(lock)=RW_LOCK_UNLOCKED	
+ #endif
+ 
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
++/* Used by sdladrv(_src).c, removed in 3.7 */
++#define pci_dev_b(n) list_entry(n, struct pci_dev, bus_list)
++#endif
++
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28) 
+ #define device_create_drvdata(a,b,c,d,e) device_create(a,b,c,d,e) 
+ #endif

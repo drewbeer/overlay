@@ -1,0 +1,33 @@
+--- wanpipe-7.0.2/patches/kdrivers/src/wanrouter/af_wanpipe.c.orig	2013-05-25 17:20:12.347660389 +0200
++++ wanpipe-7.0.2/patches/kdrivers/src/wanrouter/af_wanpipe.c	2013-05-25 17:20:37.993661563 +0200
+@@ -1725,9 +1725,6 @@ static int wanpipe_getname(struct socket
+ int wanpipe_notifier(struct notifier_block *this, unsigned long msg, void *data)
+ {
+ 	struct sock *sk;
+-#ifdef LINUX_2_6
+-	struct hlist_node *node;
+-#endif
+ 	netdevice_t *dev = (netdevice_t*)data;
+ 
+ 	if (dev==NULL){
+@@ -1737,7 +1734,7 @@ int wanpipe_notifier(struct notifier_blo
+ 
+ 	read_lock(&wanpipe_sklist_lock);
+ #ifdef LINUX_2_6
+-	sk_for_each(sk, node, &wanpipe_sklist) {
++	sk_for_each(sk, &wanpipe_sklist) {
+ #else
+ 	for (sk = wanpipe_sklist; sk; sk = sk->next) {
+ #endif
+--- wanpipe-7.0.2/patches/kdrivers/src/wanrouter/af_wanpipe_datascope.c.orig	2013-05-25 17:19:13.933657714 +0200
++++ wanpipe-7.0.2/patches/kdrivers/src/wanrouter/af_wanpipe_datascope.c	2013-05-25 17:19:57.081659690 +0200
+@@ -151,8 +151,7 @@ int wanpipe_bind_sk_to_parent(struct soc
+ 	write_lock_irqsave(&wanpipe_parent_sklist_lock,flags);
+ #ifdef LINUX_2_6
+ 	{
+-	struct hlist_node *node;
+-	sk_for_each(parent_sk, node, &wanpipe_parent_sklist) {
++	sk_for_each(parent_sk, &wanpipe_parent_sklist) {
+ 		if (SK_PRIV((parent_sk))->dev == dev) {
+ 			break;
+ 		}

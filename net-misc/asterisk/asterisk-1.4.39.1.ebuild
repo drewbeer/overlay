@@ -207,7 +207,6 @@ src_configure() {
 
 src_compile() {
 	ASTLDFLAGS="${LDFLAGS}" emake
-#	ASTLDFLAGS="${LDFLAGS}" emake USER_MAKEOPTS="${S}"/gentoo.makeopts || die "emake failed"
 }
 
 src_install() {

@@ -1,22 +1,119 @@
 #!/sbin/runscript
-# Copyright 2002 Frauenhofer Gesellschaft FOKUS, Germany.
-# Distributed under the terms of the GNU General Public License, v2 or later
 # $Header$
 
+DAEMON=/usr/sbin/opensips
+HOMEDIR=/var/run/opensips
+NAME=opensips
+PIDFILE_LRN=${HOMEDIR}/LRN_${NAME}.pid
+PIDFILE_FAKERING=${HOMEDIR}/FAKERING_${NAME}.pid
+PIDFILE_RTP=${HOMEDIR}/RTP_${NAME}.pid
+PIDFILE_NORTP=${HOMEDIR}/NORTP_${NAME}.pid
+PIDFILE_INDIALIN=${HOMEDIR}/INDIALIN_${NAME}.pid
+PIDFILE_INDID=${HOMEDIR}/INDID_${NAME}.pid
+
+DEFAULTS=/etc/conf.d/opensips
+RUN_OPENSIPS=no
+
+ulimit -c 0
+ulimit -d unlimited
+ulimit -f unlimited
+ulimit -l unlimited
+ulimit -m unlimited
+ulimit -n 100000
+ulimit -s 8192
+ulimit -t unlimited
+ulimit -v unlimited
+
+
 depend() {
-	need net
+        need net
 }
 
+# Load startup options if available
+if [ -f /etc/conf.d/opensips ]; then
+   . /etc/conf.d/opensips || true
+fi
+
+if [ "$RUN_OPENSIPS" != "yes" ]; then
+    echo "OpenSIPS not yet configured. Edit /etc/conf.d/opensips first."
+    exit 0
+fi
+
+set -e
+
+S_MEMORY=$((`echo ${S_MEMORY} | sed -e 's/[^0-9]//g'`))
+P_MEMORY=$((`echo ${P_MEMORY} | sed -e 's/[^0-9]//g'`))
+[ -z "${USER}" ]  && USER=opensips
+[ -z "${GROUP}" ] && GROUP=opensips
+[ ${S_MEMORY} -le 0 ] && S_MEMORY=32
+[ ${P_MEMORY} -le 0 ] && P_MEMORY=32
+
+OPTIONS_LRN="-P ${PIDFILE_LRN} -m ${S_MEMORY} -M ${P_MEMORY} -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_lrn.cfg"
+OPTIONS_FAKERING="-P ${PIDFILE_FAKERING} -m ${S_MEMORY} -M $P_MEMORY -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_fake_ring.cfg"
+OPTIONS_RTP="-P ${PIDFILE_RTP} -m ${S_MEMORY} -M $P_MEMORY -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_rtp.cfg"
+OPTIONS_NORTP="-P ${PIDFILE_NORTP} -m ${S_MEMORY} -M ${P_MEMORY} -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_nortp.cfg"
+OPTIONS_INDIALIN="-P ${PIDFILE_INDIALIN} -m ${S_MEMORY} -M ${P_MEMORY} -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_inbound_dialin.cfg"
+OPTIONS_INDID="-P ${PIDFILE_INDID} -m ${S_MEMORY} -M ${P_MEMORY} -u ${USER} -g ${GROUP} -f /etc/opensips/opensips_inbound_did.cfg"
+
 start() {
-	ebegin "Starting OpenSIPS"
-	start-stop-daemon --start --quiet --pidfile /var/run/opensips.pid \
-		--exec /usr/sbin/opensips -- -P /var/run/opensips.pid
+	# dirs under /var/run can go away on reboots.
+	mkdir -p "${HOMEDIR}"
+	chmod 775 "${HOMEDIR}"
+	chown "${USER}:${GROUP}" "${HOMEDIR}" >/dev/null 2>&1 || true
+	
+	ebegin "Starting LRN - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_LRN} \
+	--exec ${DAEMON} -- ${OPTIONS_LRN}
+	eend $?
+	
+	ebegin "Starting FAKE RING - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_FAKERING} \
+	--exec ${DAEMON} -- ${OPTIONS_FAKERING}
+	eend $?
+	
+	ebegin "Starting RTP - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_RTP} \
+	        --exec ${DAEMON} -- ${OPTIONS_RTP}
+	eend $?
+	
+	ebegin "Starting NORTP - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_NORTP} \
+	        --exec ${DAEMON} -- ${OPTIONS_NORTP}
+	eend $?
+	
+	ebegin "Starting INBOUND DIAL IN - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_INDIALIN} \
+	      --exec ${DAEMON} -- ${OPTIONS_INDIALIN}
+	eend $?
+	
+	ebegin "Starting INBOUND DID - ${NAME}"
+	start-stop-daemon --start --quiet --pidfile ${PIDFILE_INDID} \
+	        --exec ${DAEMON} -- ${OPTIONS_INDID}
 	eend $?
 }
 
 stop() {
-	ebegin "Stopping OpenSIPS"
-	start-stop-daemon --stop --quiet --pidfile /var/run/opensips.pid
+	ebegin "Stopping LRN - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_LRN}
+	eend $?
+	
+	ebegin "Stopping FAKE RING - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_FAKERING}
+	eend $?
+	
+	ebegin "Stopping RTP - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_RTP}
+	eend $?
+	
+	ebegin "Stopping NORTP - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_NORTP}
+	eend $?
+	
+	ebegin "Stopping INBOUND DIAL IN - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_INDIALIN}
+	eend $?
+	
+	ebegin "Stopping INBOUND DID - ${NAME}"
+	start-stop-daemon --stop --quiet --pidfile ${PIDFILE_INDID}
 	eend $?
 }
-

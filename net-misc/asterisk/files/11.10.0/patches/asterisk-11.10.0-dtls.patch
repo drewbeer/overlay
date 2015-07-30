@@ -1,0 +1,2521 @@
+From 18fefcd0fde2a8798df8c630e03a8fdcbb2c28d0 Mon Sep 17 00:00:00 2001
+From: ichramm <jramirez@inconcertcc.com>
+Date: Mon, 2 Jun 2014 18:10:08 -0300
+Subject: [PATCH] Fixed DTLS issues
+
+* Set local fingerprint when making calls to WebRTC peers
+* Accept fingerprint when receiving a call from a WebRTC peer
+
+Required peer configuration (DTLS related only)
+
+   dtlsenable=yes
+   dtlsverify=no
+   dtlssetup=actpass
+   dtlscertfile=~/certs/crt.ca.pem
+   dtlsprivatekey=~/certs/private/key.ca.pem
+---
+ channels/chan_sip.c           | 450 +++++++++++++++----------------
+ include/asterisk/rtp_engine.h |   6 +-
+ res/res_rtp_asterisk.c        | 615 +++++++++++++++++++++++++++++++++++++++---
+ 3 files changed, 792 insertions(+), 279 deletions(-)
+
+diff --git a/channels/chan_sip.c b/channels/chan_sip.c
+index f382993..fa223f8 100644
+--- a/channels/chan_sip.c
++++ b/channels/chan_sip.c
+@@ -356,7 +356,7 @@ ASTERISK_FILE_VERSION(__FILE__, "$Revision: 413876 $")
+ 			<para>Since there are several headers (such as Via) which can occur multiple
+ 			times, SIP_HEADER takes an optional second argument to specify which header with
+ 			that name to retrieve. Headers start at offset <literal>1</literal>.</para>
+-			<para>Please observe that contents of the SDP (an attachment to the 
++			<para>Please observe that contents of the SDP (an attachment to the
+ 			SIP request) can't be accessed with this function.</para>
+ 		</description>
+ 	</function>
+@@ -1386,7 +1386,7 @@ static int process_sdp_a_video(const char *a, struct sip_pvt *p, struct ast_rtp_
+ static int process_sdp_a_text(const char *a, struct sip_pvt *p, struct ast_rtp_codecs *newtextrtp, char *red_fmtp, int *red_num_gen, int *red_data_pt, int *last_rtpmap_codec);
+ static int process_sdp_a_image(const char *a, struct sip_pvt *p);
+ static void add_ice_to_sdp(struct ast_rtp_instance *instance, struct ast_str **a_buf);
+-static void add_dtls_to_sdp(struct ast_rtp_instance *instance, struct ast_str **a_buf);
++static void add_dtls_to_sdp(struct ast_rtp_instance *instance, const struct sip_pvt *dialog, struct ast_str **a_buf);
+ static void start_ice(struct ast_rtp_instance *instance);
+ static void add_codec_to_sdp(const struct sip_pvt *p, struct ast_format *codec,
+ 			     struct ast_str **m_buf, struct ast_str **a_buf,
+@@ -2669,7 +2669,7 @@ static int sip_tls_read(struct sip_request *req, struct sip_request *reqcpy, str
+ 	size_t datalen = ast_str_strlen(req->data);
+ 	char buf[1024] = "";
+ 	int timeout = -1;
+- 
++
+  	/* Read in headers one line at a time */
+ 	while (datalen < 4 || strncmp(REQ_OFFSET_TO_STR(req, data->used - 4), "\r\n\r\n", 4)) {
+  		if (!tcptls_session->client && !authenticated) {
+@@ -2778,7 +2778,7 @@ static int sip_tls_read(struct sip_request *req, struct sip_request *reqcpy, str
+ 			}
+ 			content_length -= strlen(buf);
+ 			ast_str_append(&req->data, 0, "%s", buf);
+-		
++
+ 			datalen = ast_str_strlen(req->data);
+ 			if (datalen > SIP_MAX_PACKET_SIZE) {
+ 				ast_log(LOG_WARNING, "Rejecting TLS packet from '%s' because way too large: %zu\n",
+@@ -2999,7 +2999,7 @@ static int sip_tcp_read(struct sip_request *req, struct ast_tcptls_session_insta
+ 			ast_str_append(&req->data, 0, "%s", ast_str_buffer(tcptls_session->overflow_buf));
+ 			ast_str_reset(tcptls_session->overflow_buf);
+ 		}
+-		
++
+ 		datalen = ast_str_strlen(req->data);
+ 		if (datalen > SIP_MAX_PACKET_SIZE) {
+ 			ast_log(LOG_WARNING, "Rejecting TCP packet from '%s' because way too large: %zu\n",
+@@ -3130,7 +3130,7 @@ static void *_sip_tcp_helper_thread(struct ast_tcptls_session_instance *tcptls_s
+ 			}
+ 		}
+ 
+-		/* 
++		/*
+ 		 * handle the socket event, check for both reads from the socket fd or TCP overflow buffer,
+ 		 * and writes from alert_pipe fd.
+ 		 */
+@@ -3428,7 +3428,7 @@ void dialog_unlink_all(struct sip_pvt *dialog)
+ 	AST_SCHED_DEL_UNREF(sched, dialog->waitid, dialog_unref(dialog, "when you delete the waitid sched, you should dec the refcount for the stored dialog ptr"));
+ 
+ 	AST_SCHED_DEL_UNREF(sched, dialog->initid, dialog_unref(dialog, "when you delete the initid sched, you should dec the refcount for the stored dialog ptr"));
+-	
++
+ 	if (dialog->autokillid > -1) {
+ 		AST_SCHED_DEL_UNREF(sched, dialog->autokillid, dialog_unref(dialog, "when you delete the autokillid sched, you should dec the refcount for the stored dialog ptr"));
+ 	}
+@@ -3649,7 +3649,7 @@ static int method_match(enum sipmethod id, const char *name)
+ static int find_sip_method(const char *msg)
+ {
+ 	int i, res = 0;
+-	
++
+ 	if (ast_strlen_zero(msg)) {
+ 		return 0;
+ 	}
+@@ -5530,7 +5530,7 @@ static int register_realtime_peers_with_callbackextens(void)
+  * Checks the "sipregs" realtime family from extconfig.conf if it's configured.
+  * This returns a pointer to a peer and because we use build_peer, we can rest
+  * assured that the refcount is bumped.
+- * 
++ *
+  * \note This is never called with both newpeername and addr at the same time.
+  * If you do, be prepared to get a peer with a different name than newpeername.
+  */
+@@ -5876,10 +5876,6 @@ static int dialog_initialize_rtp(struct sip_pvt *dialog)
+ 		ice->stop(dialog->rtp);
+ 	}
+ 
+-	if (dialog_initialize_dtls_srtp(dialog, dialog->rtp, &dialog->srtp)) {
+-		return -1;
+-	}
+-
+ 	if (ast_test_flag(&dialog->flags[1], SIP_PAGE2_VIDEOSUPPORT_ALWAYS) ||
+ 			(ast_test_flag(&dialog->flags[1], SIP_PAGE2_VIDEOSUPPORT) && (ast_format_cap_has_type(dialog->caps, AST_FORMAT_TYPE_VIDEO)))) {
+ 		if (!(dialog->vrtp = ast_rtp_instance_new(dialog->engine, sched, &bindaddr_tmp, NULL))) {
+@@ -5890,16 +5886,17 @@ static int dialog_initialize_rtp(struct sip_pvt *dialog)
+ 			ice->stop(dialog->vrtp);
+ 		}
+ 
+-		if (dialog_initialize_dtls_srtp(dialog, dialog->vrtp, &dialog->vsrtp)) {
+-			return -1;
+-		}
+-
+ 		ast_rtp_instance_set_timeout(dialog->vrtp, dialog->rtptimeout);
+ 		ast_rtp_instance_set_hold_timeout(dialog->vrtp, dialog->rtpholdtimeout);
+ 		ast_rtp_instance_set_keepalive(dialog->vrtp, dialog->rtpkeepalive);
+ 
+ 		ast_rtp_instance_set_prop(dialog->vrtp, AST_RTP_PROPERTY_RTCP, 1);
+ 		ast_rtp_instance_set_qos(dialog->vrtp, global_tos_video, global_cos_video, "SIP VIDEO");
++
++		/*SRTP_DTLS */
++		if (dialog_initialize_dtls_srtp(dialog, dialog->vrtp, &dialog->vsrtp)) {
++			return -1;
++		}
+ 	}
+ 
+ 	if (ast_test_flag(&dialog->flags[1], SIP_PAGE2_TEXTSUPPORT)) {
+@@ -5911,14 +5908,15 @@ static int dialog_initialize_rtp(struct sip_pvt *dialog)
+ 			ice->stop(dialog->trtp);
+ 		}
+ 
+-		if (dialog_initialize_dtls_srtp(dialog, dialog->trtp, &dialog->tsrtp)) {
+-			return -1;
+-		}
+-
+ 		/* Do not timeout text as its not constant*/
+ 		ast_rtp_instance_set_keepalive(dialog->trtp, dialog->rtpkeepalive);
+ 
+ 		ast_rtp_instance_set_prop(dialog->trtp, AST_RTP_PROPERTY_RTCP, 1);
++
++		/*SRTP_DTLS */
++		if (dialog_initialize_dtls_srtp(dialog, dialog->trtp, &dialog->tsrtp)) {
++			return -1;
++		}
+ 	}
+ 
+ 	ast_rtp_instance_set_timeout(dialog->rtp, dialog->rtptimeout);
+@@ -5929,7 +5927,12 @@ static int dialog_initialize_rtp(struct sip_pvt *dialog)
+ 	ast_rtp_instance_set_prop(dialog->rtp, AST_RTP_PROPERTY_DTMF, ast_test_flag(&dialog->flags[0], SIP_DTMF) == SIP_DTMF_RFC2833);
+ 	ast_rtp_instance_set_prop(dialog->rtp, AST_RTP_PROPERTY_DTMF_COMPENSATE, ast_test_flag(&dialog->flags[1], SIP_PAGE2_RFC2833_COMPENSATE));
+ 
+-	ast_rtp_instance_set_qos(dialog->rtp, global_tos_audio, global_cos_audio, "SIP RTP");
++	/*SRTP_DTLS */
++	if (dialog_initialize_dtls_srtp(dialog, dialog->rtp, &dialog->srtp)) {
++		return -1;
++	}
++
++ 	ast_rtp_instance_set_qos(dialog->rtp, global_tos_audio, global_cos_audio, "SIP RTP");
+ 
+ 	do_setnat(dialog);
+ 
+@@ -6177,7 +6180,7 @@ static int create_addr(struct sip_pvt *dialog, const char *opeer, struct ast_soc
+ 		 * an A record lookup should be used instead of SRV.
+ 		 */
+ 		if (!hostport.port && sip_cfg.srvlookup) {
+-			snprintf(service, sizeof(service), "_%s._%s.%s", 
++			snprintf(service, sizeof(service), "_%s._%s.%s",
+ 				 get_srv_service(dialog->socket.type),
+ 				 get_srv_protocol(dialog->socket.type), peername);
+ 			if ((srv_ret = ast_get_srv(NULL, host, sizeof(host), &tportno,
+@@ -6438,7 +6441,7 @@ static void sip_subscribe_mwi_destroy(struct sip_subscription_mwi *mwi)
+ 		mwi->call->mwi = NULL;
+ 		sip_destroy(mwi->call);
+ 	}
+-	
++
+ 	AST_SCHED_DEL(sched, mwi->resub);
+ 	ast_string_field_free_memory(mwi);
+ 	ast_free(mwi);
+@@ -6494,16 +6497,16 @@ void __sip_destroy(struct sip_pvt *p, int lockowner, int lockdialoglist)
+ 		p->relatedpeer->mwipvt = dialog_unref(p->relatedpeer->mwipvt, "delete ->relatedpeer->mwipvt");
+ 	if (p->relatedpeer && p->relatedpeer->call == p)
+ 		p->relatedpeer->call = dialog_unref(p->relatedpeer->call, "unset the relatedpeer->call field in tandem with relatedpeer field itself");
+-	
++
+ 	if (p->relatedpeer)
+ 		p->relatedpeer = sip_unref_peer(p->relatedpeer,"unsetting a dialog relatedpeer field in sip_destroy");
+-	
++
+ 	if (p->registry) {
+ 		if (p->registry->call == p)
+ 			p->registry->call = dialog_unref(p->registry->call, "nulling out the registry's call dialog field in unlink_all");
+ 		p->registry = registry_unref(p->registry, "delete p->registry");
+ 	}
+-	
++
+ 	if (p->mwi) {
+ 		p->mwi->call = NULL;
+ 		p->mwi = NULL;
+@@ -7190,8 +7193,8 @@ static int sip_hangup(struct ast_channel *ast)
+ 			} else {
+ 				/* Note we will need a BYE when this all settles out
+ 				   but we can't send one while we have "INVITE" outstanding. */
+-				ast_set_flag(&p->flags[0], SIP_PENDINGBYE);	
+-				ast_clear_flag(&p->flags[0], SIP_NEEDREINVITE);	
++				ast_set_flag(&p->flags[0], SIP_PENDINGBYE);
++				ast_clear_flag(&p->flags[0], SIP_NEEDREINVITE);
+ 				AST_SCHED_DEL_UNREF(sched, p->waitid, dialog_unref(p, "when you delete the waitid sched, you should dec the refcount for the stored dialog ptr"));
+ 				if (sip_cancel_destroy(p)) {
+ 					ast_log(LOG_WARNING, "Unable to cancel SIP destruction.  Expect bad things.\n");
+@@ -7228,7 +7231,7 @@ static void try_suggested_sip_codec(struct sip_pvt *p)
+ 		codec = pbx_builtin_getvar_helper(p->owner, "SIP_CODEC");
+ 	}
+ 
+-	if (!codec) 
++	if (!codec)
+ 		return;
+ 
+ 	ast_getformatbyname(codec, &fmt);
+@@ -7706,7 +7709,7 @@ static int sip_indicate(struct ast_channel *ast, int condition, const void *data
+ 		if (ast_channel_state(ast) == AST_STATE_RING) {
+ 			p->invitestate = INV_EARLY_MEDIA;
+ 			if (!ast_test_flag(&p->flags[0], SIP_PROGRESS_SENT) ||
+-			    (ast_test_flag(&p->flags[0], SIP_PROG_INBAND) == SIP_PROG_INBAND_NEVER)) {				
++			    (ast_test_flag(&p->flags[0], SIP_PROG_INBAND) == SIP_PROG_INBAND_NEVER)) {
+ 				/* Send 180 ringing if out-of-band seems reasonable */
+ 				transmit_provisional_response(p, "180 Ringing", &p->initreq, 0);
+ 				ast_set_flag(&p->flags[0], SIP_RINGING);
+@@ -7896,7 +7899,7 @@ static struct ast_channel *sip_new(struct sip_pvt *i, int state, const char *tit
+ 
+ 	{
+ 		const char *my_name;	/* pick a good name */
+-	
++
+ 		if (title) {
+ 			my_name = title;
+ 		} else {
+@@ -8046,7 +8049,7 @@ static struct ast_channel *sip_new(struct sip_pvt *i, int state, const char *tit
+ 		struct ast_tone_zone *zone;
+ 		if (!(zone = ast_get_indication_zone(i->zone))) {
+ 			ast_log(LOG_ERROR, "Unknown country code '%s' for tonezone. Check indications.conf for available country codes.\n", i->zone);
+-		} 
++		}
+ 		ast_channel_zone_set(tmp, zone);
+ 	}
+ 	i->owner = tmp;
+@@ -8315,7 +8318,7 @@ static struct ast_frame *sip_rtp_read(struct ast_channel *ast, struct sip_pvt *p
+ {
+ 	/* Retrieve audio/etc from channel.  Assumes p->lock is already held. */
+ 	struct ast_frame *f;
+-	
++
+ 	if (!p->rtp) {
+ 		/* We have no RTP allocated for this channel */
+ 		return &ast_null_frame;
+@@ -8721,7 +8724,7 @@ struct sip_pvt *sip_alloc(ast_string_field callid, struct ast_sockaddr *addr,
+ 
+ 	p->do_history = recordhistory;
+ 
+-	p->branch = ast_random();	
++	p->branch = ast_random();
+ 	make_our_tag(p);
+ 	p->ocseq = INITIAL_CSEQ;
+ 	p->allowed_methods = UINT_MAX;
+@@ -8921,14 +8924,14 @@ static enum match_req_res match_req_to_dialog(struct sip_pvt *sip_pvt_ptr, struc
+ 
+ 	/*
+ 	 * Compare incoming request against initial transaction.
+-	 * 
++	 *
+ 	 * This is a best effort attempt at distinguishing forked requests from
+ 	 * our initial transaction.  If all the elements are NOT in place to evaluate
+ 	 * this, this block is ignored and the dialog match is made regardless.
+ 	 * Once the totag is established after the dialog is confirmed, this is not necessary.
+ 	 *
+ 	 * CRITERIA required for initial transaction matching.
+-	 * 
++	 *
+ 	 * 1. Is a Request
+ 	 * 2. Callid and theirtag match (this is done in the dialog matching block)
+ 	 * 3. totag is NOT present
+@@ -9523,7 +9526,7 @@ static unsigned int parse_allowed_methods(struct sip_request *req)
+ static unsigned int set_pvt_allowed_methods(struct sip_pvt *pvt, struct sip_request *req)
+ {
+ 	pvt->allowed_methods = parse_allowed_methods(req);
+-	
++
+ 	if (ast_test_flag(&pvt->flags[1], SIP_PAGE2_RPID_UPDATE)) {
+ 		mark_method_allowed(&pvt->allowed_methods, SIP_UPDATE);
+ 	}
+@@ -9759,7 +9762,7 @@ static int find_sdp(struct sip_request *req)
+ 		}
+ 		if (!strcasecmp(line, "Content-Type: application/sdp"))
+ 			found_application_sdp = TRUE;
+-		
++
+ 		if (ast_strlen_zero(line)) {
+ 			if (found_application_sdp && !found_end_of_headers){
+ 				req->sdp_start = x;
+@@ -9942,6 +9945,9 @@ static int process_sdp(struct sip_pvt *p, struct sip_request *req, int t38action
+ 	/* SRTP */
+ 	int secure_audio = FALSE;
+ 	int secure_video = FALSE;
++	/** SRTP_DTLS **/
++	int processed_dtls = FALSE;
++	/** SRTP_DTLS **/
+ 
+ 	/* Others */
+ 	int sendonly = -1;
+@@ -10034,12 +10040,15 @@ static int process_sdp(struct sip_pvt *p, struct sip_request *req, int t38action
+ 			}
+ 
+ 			if (process_sdp_a_dtls(value, p, p->rtp)) {
++				processed_dtls = TRUE;
+ 				processed = TRUE;
+ 			}
+ 			if (process_sdp_a_dtls(value, p, p->vrtp)) {
++				processed_dtls = TRUE;
+ 				processed = TRUE;
+ 			}
+ 			if (process_sdp_a_dtls(value, p, p->trtp)) {
++				processed_dtls = TRUE;
+ 				processed = TRUE;
+ 			}
+ 
+@@ -10132,7 +10141,6 @@ static int process_sdp(struct sip_pvt *p, struct sip_request *req, int t38action
+ 					}
+ 				} else if (!strcmp(protocol, "UDP/TLS/RTP/SAVP") || !strcmp(protocol, "UDP/TLS/RTP/SAVPF")) {
+ 					secure_audio = 1;
+-
+ 					if (p->srtp) {
+ 						ast_set_flag(p->srtp, SRTP_CRYPTO_OFFER_OK);
+ 					}
+@@ -10447,6 +10455,7 @@ static int process_sdp(struct sip_pvt *p, struct sip_request *req, int t38action
+ 						processed = TRUE;
+ 					} else if (process_sdp_a_dtls(value, p, p->rtp)) {
+ 						processed = TRUE;
++						processed_dtls = TRUE;
+ 					} else if (process_sdp_a_sendonly(value, &sendonly)) {
+ 						processed = TRUE;
+ 					} else if (!processed_crypto && process_crypto(p, p->rtp, &p->srtp, value)) {
+@@ -10462,6 +10471,7 @@ static int process_sdp(struct sip_pvt *p, struct sip_request *req, int t38action
+ 						processed = TRUE;
+ 					} else if (process_sdp_a_dtls(value, p, p->vrtp)) {
+ 						processed = TRUE;
++						processed_dtls = TRUE;
+ 					} else if (!processed_crypto && process_crypto(p, p->vrtp, &p->vsrtp, value)) {
+ 						processed_crypto = TRUE;
+ 						processed = TRUE;
+@@ -10495,10 +10505,11 @@ static int process_sdp(struct sip_pvt *p, struct sip_request *req, int t38action
+ 		}
+ 
+ 		/* Ensure crypto lines are provided where necessary */
+-		if (audio && secure_audio && !processed_crypto) {
++		ast_debug(3, "Processed DTLS [%s]\n", processed_dtls?"TRUE":"FALSE");
++		if (audio && secure_audio && !(processed_crypto || processed_dtls)) {
+ 			ast_log(LOG_WARNING, "Rejecting secure audio stream without encryption details: %s\n", m);
+ 			return -1;
+-		} else if (video && secure_video && !processed_crypto) {
++		} else if (video && secure_video && !(processed_crypto || processed_dtls)) {
+ 			ast_log(LOG_WARNING, "Rejecting secure video stream without encryption details: %s\n", m);
+ 			return -1;
+ 		}
+@@ -10520,6 +10531,10 @@ static int process_sdp(struct sip_pvt *p, struct sip_request *req, int t38action
+ 		goto process_sdp_cleanup;
+ 	}
+ 
++	if (processed_dtls && p->srtp) {
++		ast_set_flag(p->srtp, SRTP_CRYPTO_OFFER_OK);
++	}
++
+ 	if (secure_audio && !(p->srtp && (ast_test_flag(p->srtp, SRTP_CRYPTO_OFFER_OK)))) {
+ 		ast_log(LOG_WARNING, "Can't provide secure audio requested in SDP offer\n");
+ 		res = -1;
+@@ -11005,6 +11020,7 @@ static int process_sdp_a_dtls(const char *a, struct sip_pvt *p, struct ast_rtp_i
+ {
+ 	struct ast_rtp_engine_dtls *dtls;
+ 	int found = FALSE;
++	int found_setup = FALSE;
+ 	char value[256], hash[6];
+ 
+ 	if (!instance || !p->dtls_cfg.enabled || !(dtls = ast_rtp_instance_get_dtls(instance))) {
+@@ -11013,7 +11029,7 @@ static int process_sdp_a_dtls(const char *a, struct sip_pvt *p, struct ast_rtp_i
+ 
+ 	if (sscanf(a, "setup: %255s", value) == 1) {
+ 		found = TRUE;
+-
++		found_setup = TRUE;
+ 		if (!strcasecmp(value, "active")) {
+ 			dtls->set_setup(instance, AST_RTP_DTLS_SETUP_ACTIVE);
+ 		} else if (!strcasecmp(value, "passive")) {
+@@ -11037,17 +11053,23 @@ static int process_sdp_a_dtls(const char *a, struct sip_pvt *p, struct ast_rtp_i
+ 			ast_log(LOG_WARNING, "Unsupported connection attribute value '%s' received on dialog '%s'\n",
+ 				value, p->callid);
+ 		}
+-	} else if (sscanf(a, "fingerprint: %5s %255s", hash, value) == 2) {
++	} else if (sscanf(a, "fingerprint: %s %255s", hash, value) == 2) {
+ 		found = TRUE;
+ 
+ 		if (!strcasecmp(hash, "sha-1")) {
+ 			dtls->set_fingerprint(instance, AST_RTP_DTLS_HASH_SHA1, value);
++		} else if (!strcasecmp(hash, "sha-256")) {
++			dtls->set_fingerprint(instance, AST_RTP_DTLS_HASH_SHA256, value);
+ 		} else {
+ 			ast_log(LOG_WARNING, "Unsupported fingerprint hash type '%s' received on dialog '%s'\n",
+ 				hash, p->callid);
+ 		}
+ 	}
+ 
++	if (found && !found_setup) { /* No setup line provided by WebRTC peer */
++		dtls->set_setup(instance, AST_RTP_DTLS_SETUP_PASSIVE);
++	}
++
+ 	return found;
+ }
+ 
+@@ -11398,12 +11420,12 @@ static int add_header(struct sip_request *req, const char *var, const char *valu
+ 
+ 	req->headers++;
+ 
+-	return 0;	
++	return 0;
+ }
+ 
+-/*! 
++/*!
+  * \pre dialog is assumed to be locked while calling this function
+- * \brief Add 'Max-Forwards' header to SIP message 
++ * \brief Add 'Max-Forwards' header to SIP message
+  */
+ static int add_max_forwards(struct sip_pvt *dialog, struct sip_request *req)
+ {
+@@ -11930,7 +11952,7 @@ static int reqprep(struct sip_request *req, struct sip_pvt *p, int sipmethod, ui
+ 				sizeof(stripped));
+ 		n = get_in_brackets(stripped);
+ 		c = remove_uri_parameters(n);
+-	}	
++	}
+ 	init_req(req, sipmethod, c);
+ 
+ 	snprintf(tmp, sizeof(tmp), "%u %s", seqno, sip_methods[sipmethod].text);
+@@ -12353,7 +12375,7 @@ static void get_realm(struct sip_pvt *p, const struct sip_request *req)
+ 			}
+ 		}
+ 	}
+-	
++
+ 	/* Use default realm from config file */
+ 	ast_string_field_set(p, realm, sip_cfg.realm);
+ }
+@@ -12505,7 +12527,6 @@ static int add_rpid(struct sip_request *req, struct sip_pvt *p)
+ 	const char *privacy = NULL;
+ 	const char *screen = NULL;
+ 	struct ast_party_id connected_id;
+-	const char *anonymous_string = "\"Anonymous\" <sip:anonymous@anonymous.invalid>";
+ 
+ 	if (!ast_test_flag(&p->flags[0], SIP_SENDRPID)) {
+ 		return 0;
+@@ -12525,41 +12546,16 @@ static int add_rpid(struct sip_request *req, struct sip_pvt *p)
+ 	}
+ 	lid_pres = ast_party_id_presentation(&connected_id);
+ 
+-	if (((lid_pres & AST_PRES_RESTRICTION) != AST_PRES_ALLOWED) &&
+-			(ast_test_flag(&p->flags[1], SIP_PAGE2_TRUST_ID_OUTBOUND) == SIP_PAGE2_TRUST_ID_OUTBOUND_NO)) {
+-		/* If pres is not allowed and we don't trust the peer, we don't apply an RPID header */
+-		return 0;
+-	}
+-
+-	fromdomain = p->fromdomain;
+-	if (!fromdomain ||
+-			((ast_test_flag(&p->flags[1], SIP_PAGE2_TRUST_ID_OUTBOUND) == SIP_PAGE2_TRUST_ID_OUTBOUND_YES) &&
+-			!strcmp("anonymous.invalid", fromdomain))) {
+-		/* If the fromdomain is NULL or if it was set to anonymous.invalid due to privacy settings and we trust the peer,
+-		 * use the host IP address */
+-		fromdomain = ast_sockaddr_stringify_host_remote(&p->ourip);
+-	}
++	fromdomain = S_OR(p->fromdomain, ast_sockaddr_stringify_host_remote(&p->ourip));
+ 
+ 	lid_num = ast_uri_encode(lid_num, tmp2, sizeof(tmp2), ast_uri_sip_user);
+ 
+ 	if (ast_test_flag(&p->flags[0], SIP_SENDRPID_PAI)) {
+-		if (ast_test_flag(&p->flags[1], SIP_PAGE2_TRUST_ID_OUTBOUND) != SIP_PAGE2_TRUST_ID_OUTBOUND_LEGACY) {
+-			/* trust_id_outbound = yes - Always give full information even if it's private, but append a privacy header
+-			 * When private data is included */
+-			ast_str_set(&tmp, -1, "\"%s\" <sip:%s@%s>", lid_name, lid_num, fromdomain);
+-			if ((lid_pres & AST_PRES_RESTRICTION) != AST_PRES_ALLOWED) {
+-				add_header(req, "Privacy", "id");
+-			}
+-		} else {
+-			/* trust_id_outbound = legacy - behave in a non RFC-3325 compliant manner and send anonymized data when
+-			 * when handling private data. */
+-			if ((lid_pres & AST_PRES_RESTRICTION) == AST_PRES_ALLOWED) {
+-				ast_str_set(&tmp, -1, "\"%s\" <sip:%s@%s>", lid_name, lid_num, fromdomain);
+-			} else {
+-				ast_str_set(&tmp, -1, "%s", anonymous_string);
+-			}
+-		}
++		ast_str_set(&tmp, -1, "\"%s\" <sip:%s@%s>", lid_name, lid_num, fromdomain);
+ 		add_header(req, "P-Asserted-Identity", ast_str_buffer(tmp));
++		if ((lid_pres & AST_PRES_RESTRICTION) != AST_PRES_ALLOWED) {
++			add_header(req, "Privacy", "id");
++		}
+ 	} else {
+ 		ast_str_set(&tmp, -1, "\"%s\" <sip:%s@%s>;party=%s", lid_name, lid_num, fromdomain, p->outgoing_call ? "calling" : "called");
+ 
+@@ -12693,11 +12689,15 @@ static void start_ice(struct ast_rtp_instance *instance)
+ }
+ 
+ /*! \brief Add DTLS attributes to SDP */
+-static void add_dtls_to_sdp(struct ast_rtp_instance *instance, struct ast_str **a_buf)
++static void add_dtls_to_sdp(struct ast_rtp_instance *instance, const struct sip_pvt *dialog, struct ast_str **a_buf)
+ {
+ 	struct ast_rtp_engine_dtls *dtls;
+ 	const char *fingerprint;
+ 
++	/*SRTP_DTLS */
++	dtls = ast_rtp_instance_get_dtls(instance);
++
++	/*SRTP_DTLS */
+ 	if (!instance || !(dtls = ast_rtp_instance_get_dtls(instance)) || !dtls->active(instance)) {
+ 		return;
+ 	}
+@@ -12730,8 +12730,13 @@ static void add_dtls_to_sdp(struct ast_rtp_instance *instance, struct ast_str **
+ 		break;
+ 	}
+ 
+-	if ((fingerprint = dtls->get_fingerprint(instance, AST_RTP_DTLS_HASH_SHA1))) {
++	if ((fingerprint = dtls->get_fingerprint(instance, &dialog->dtls_cfg, AST_RTP_DTLS_HASH_SHA256))) {
++		ast_str_append(a_buf, 0, "a=fingerprint:SHA-256 %s\r\n", fingerprint);
++	}
++	else if ((fingerprint = dtls->get_fingerprint(instance, &dialog->dtls_cfg, AST_RTP_DTLS_HASH_SHA1))) {
+ 		ast_str_append(a_buf, 0, "a=fingerprint:SHA-1 %s\r\n", fingerprint);
++	} else {
++		ast_log(LOG_WARNING, "No fingerprint was added to SDP, this may not work\n");
+ 	}
+ }
+ 
+@@ -13039,7 +13044,10 @@ static char *get_sdp_rtp_profile(const struct sip_pvt *p, unsigned int secure, s
+ 	struct ast_rtp_engine_dtls *dtls;
+ 
+ 	if ((dtls = ast_rtp_instance_get_dtls(instance)) && dtls->active(instance)) {
+-		return ast_test_flag(&p->flags[2], SIP_PAGE3_USE_AVPF) ? "UDP/TLS/RTP/SAVPF" : "UDP/TLS/RTP/SAVP";
++		/*SRTP_DTLS */
++		//return ast_test_flag(&p->flags[2], SIP_PAGE3_USE_AVPF) ? "UDP/TLS/RTP/SAVPF" : "UDP/TLS/RTP/SAVP";
++		return ast_test_flag(&p->flags[2], SIP_PAGE3_USE_AVPF) ? "RTP/SAVPF" : "RTP/SAVP";
++		/*SRTP_DTLS */
+ 	} else {
+ 		if (ast_test_flag(&p->flags[2], SIP_PAGE3_USE_AVPF)) {
+ 			return secure ? "RTP/SAVPF" : "RTP/AVPF";
+@@ -13218,12 +13226,15 @@ static enum sip_result add_sdp(struct sip_request *resp, struct sip_pvt *p, int
+ 				ast_verbose("Video is at %s\n", ast_sockaddr_stringify(&vdest));
+ 			}
+ 
++			/* Meetecho: add a=rtcp attribute */
++			ast_str_append(&a_video, 0, "a=rtcp:%d\r\n", ast_sockaddr_port(&vdest)+1);
++
+ 			if (!doing_directmedia) {
+ 				if (ast_test_flag(&p->flags[2], SIP_PAGE3_ICE_SUPPORT)) {
+ 					add_ice_to_sdp(p->vrtp, &a_video);
+ 				}
+ 
+-				add_dtls_to_sdp(p->vrtp, &a_video);
++				add_dtls_to_sdp(p->vrtp, p, &a_video);
+ 			}
+ 		}
+ 
+@@ -13244,7 +13255,7 @@ static enum sip_result add_sdp(struct sip_request *resp, struct sip_pvt *p, int
+ 					add_ice_to_sdp(p->trtp, &a_text);
+ 				}
+ 
+-				add_dtls_to_sdp(p->trtp, &a_text);
++				add_dtls_to_sdp(p->trtp, p, &a_text);
+ 			}
+ 		}
+ 
+@@ -13301,6 +13312,9 @@ static enum sip_result add_sdp(struct sip_request *resp, struct sip_pvt *p, int
+ 			ast_format_cap_add(alreadysent, &tmp_fmt);
+ 		}
+ 
++		/* Meetecho: add a=rtcp attribute */
++		ast_str_append(&a_audio, 0, "a=rtcp:%d\r\n", ast_sockaddr_port(&dest)+1);
++
+ 		/* Now send any other common audio and video codecs, and non-codec formats: */
+ 		ast_format_cap_iter_start(tmpcap);
+ 		while (!(ast_format_cap_iter_next(tmpcap, &tmp_fmt))) {
+@@ -13347,7 +13361,7 @@ static enum sip_result add_sdp(struct sip_request *resp, struct sip_pvt *p, int
+ 				add_ice_to_sdp(p->rtp, &a_audio);
+ 			}
+ 
+-			add_dtls_to_sdp(p->rtp, &a_audio);
++			add_dtls_to_sdp(p->rtp, p, &a_audio);
+ 		}
+ 	}
+ 
+@@ -13700,7 +13714,7 @@ static int determine_firstline_parts(struct sip_request *req)
+ 	INVITE that opened the SIP dialogue
+ 	We reinvite so that the audio stream (RTP) go directly between
+ 	the SIP UAs. SIP Signalling stays with * in the path.
+-	
++
+ 	If t38version is TRUE, we send T38 SDP for re-invite from audio/video to
+ 	T38 UDPTL transmission on the channel
+ 
+@@ -13711,7 +13725,7 @@ static int determine_firstline_parts(struct sip_request *req)
+ static int transmit_reinvite_with_sdp(struct sip_pvt *p, int t38version, int oldsdp)
+ {
+ 	struct sip_request req;
+-	
++
+ 	reqprep(&req, p, ast_test_flag(&p->flags[0], SIP_REINVITE_UPDATE) ?  SIP_UPDATE : SIP_INVITE, 0, 1);
+ 
+ 	add_header(&req, "Allow", ALLOWED_METHODS);
+@@ -13944,7 +13958,7 @@ static void initreqprep(struct sip_request *req, struct sip_pvt *p, int sipmetho
+ 	/* If custom URI options have been provided, append them */
+ 	if (p->options && !ast_strlen_zero(p->options->uri_options))
+ 		ast_str_append(&invite, 0, ";%s", p->options->uri_options);
+-	
++
+  	/* This is the request URI, which is the next hop of the call
+  		which may or may not be the destination of the call
+  	*/
+@@ -14074,7 +14088,7 @@ static int transmit_publish(struct sip_epa_entry *epa_entry, enum sip_publish_ty
+ 	return 0;
+ }
+ 
+-/*! 
++/*!
+  * \brief Build REFER/INVITE/OPTIONS/SUBSCRIBE message and transmit it
+  * \param p sip_pvt structure
+  * \param sipmethod
+@@ -14140,7 +14154,7 @@ static int transmit_invite(struct sip_pvt *p, int sipmethod, int sdp, int init,
+ 		}
+ 
+ 		p->stimer->st_active = TRUE;
+-		if (st_get_mode(p, 0) == SESSION_TIMER_MODE_ORIGINATE) {	
++		if (st_get_mode(p, 0) == SESSION_TIMER_MODE_ORIGINATE) {
+ 			snprintf(i2astr, sizeof(i2astr), "%d", p->stimer->st_interval);
+ 			add_header(&req, "Session-Expires", i2astr);
+ 		}
+@@ -14156,7 +14170,7 @@ static int transmit_invite(struct sip_pvt *p, int sipmethod, int sdp, int init,
+ 				  || (p->refer && global_refer_addheaders))) {
+ 		struct ast_channel *chan = p->owner; /* The owner channel */
+ 		struct varshead *headp;
+-	
++
+ 		ast_channel_lock(chan);
+ 
+ 		headp = ast_channel_varshead(chan);
+@@ -14248,15 +14262,15 @@ static int transmit_invite(struct sip_pvt *p, int sipmethod, int sdp, int init,
+ static int sip_subscribe_mwi_do(const void *data)
+ {
+ 	struct sip_subscription_mwi *mwi = (struct sip_subscription_mwi*)data;
+-	
++
+ 	if (!mwi) {
+ 		return -1;
+ 	}
+-	
++
+ 	mwi->resub = -1;
+ 	__sip_subscribe_mwi_do(mwi);
+ 	ASTOBJ_UNREF(mwi, sip_subscribe_mwi_destroy);
+-	
++
+ 	return 0;
+ }
+ 
+@@ -14348,7 +14362,7 @@ static int __sip_subscribe_mwi_do(struct sip_subscription_mwi *mwi)
+ 		transmit_invite(mwi->call, SIP_SUBSCRIBE, 0, 0, NULL);
+ 		return 0;
+ 	}
+-	
++
+ 	/* Create a dialog that we will use for the subscription */
+ 	if (!(mwi->call = sip_alloc(NULL, NULL, 0, SIP_SUBSCRIBE, NULL, NULL))) {
+ 		return -1;
+@@ -14359,7 +14373,7 @@ static int __sip_subscribe_mwi_do(struct sip_subscription_mwi *mwi)
+ 	if (!ast_sockaddr_port(&mwi->us) && mwi->portno) {
+ 		ast_sockaddr_set_port(&mwi->us, mwi->portno);
+ 	}
+-	
++
+ 	/* Setup the destination of our subscription */
+ 	if (create_addr(mwi->call, mwi->hostname, &mwi->us, 0)) {
+ 		dialog_unlink_all(mwi->call);
+@@ -14368,14 +14382,14 @@ static int __sip_subscribe_mwi_do(struct sip_subscription_mwi *mwi)
+ 	}
+ 
+ 	mwi->call->expiry = mwi_expiry;
+-	
++
+ 	if (!mwi->dnsmgr && mwi->portno) {
+ 		ast_sockaddr_set_port(&mwi->call->sa, mwi->portno);
+ 		ast_sockaddr_set_port(&mwi->call->recv, mwi->portno);
+ 	} else {
+ 		mwi->portno = ast_sockaddr_port(&mwi->call->sa);
+ 	}
+-	
++
+ 	/* Set various other information */
+ 	if (!ast_strlen_zero(mwi->authuser)) {
+ 		ast_string_field_set(mwi->call, peername, mwi->authuser);
+@@ -14400,7 +14414,7 @@ static int __sip_subscribe_mwi_do(struct sip_subscription_mwi *mwi)
+ 	change_callid_pvt(mwi->call, NULL);
+ 
+ 	ast_set_flag(&mwi->call->flags[0], SIP_OUTGOING);
+-	
++
+ 	/* Associate the call with us */
+ 	mwi->call->mwi = ASTOBJ_REF(mwi);
+ 
+@@ -14892,7 +14906,7 @@ static int transmit_notify_with_sipfrag(struct sip_pvt *p, int cseq, char *messa
+ {
+ 	struct sip_request req;
+ 	char tmp[SIPBUFSIZE/2];
+-	
++
+ 	reqprep(&req, p, SIP_NOTIFY, 0, 1);
+ 	snprintf(tmp, sizeof(tmp), "refer;id=%d", cseq);
+ 	add_header(&req, "Event", tmp);
+@@ -15018,7 +15032,7 @@ static void update_connectedline(struct sip_pvt *p, const void *data, size_t dat
+ 			ast_set_flag(&p->flags[0], SIP_OUTGOING);
+ 			p->invitestate = INV_CALLING;
+ 			send_request(p, &req, XMIT_CRITICAL, p->ocseq);
+-		} else if ((is_method_allowed(&p->allowed_methods, SIP_UPDATE)) && (!ast_strlen_zero(p->okcontacturi))) { 
++		} else if ((is_method_allowed(&p->allowed_methods, SIP_UPDATE)) && (!ast_strlen_zero(p->okcontacturi))) {
+ 			reqprep(&req, p, SIP_UPDATE, 0, 1);
+ 			add_rpid(&req, p);
+ 			add_header(&req, "X-Asterisk-rpid-update", "Yes");
+@@ -15101,8 +15115,8 @@ static int sip_reregister(const void *data)
+ 	return 0;
+ }
+ 
+-/*! \brief Register with SIP proxy 
+-	\return see \ref __sip_xmit 
++/*! \brief Register with SIP proxy
++	\return see \ref __sip_xmit
+ */
+ static int __sip_do_register(struct sip_registry *r)
+ {
+@@ -15603,7 +15617,7 @@ static int transmit_info_with_aoc(struct sip_pvt *p, struct ast_aoc_decoded *dec
+ static int transmit_info_with_digit(struct sip_pvt *p, const char digit, unsigned int duration)
+ {
+ 	struct sip_request req;
+-	
++
+ 	reqprep(&req, p, SIP_INFO, 0, 1);
+ 	add_digit(&req, digit, duration, (ast_test_flag(&p->flags[0], SIP_DTMF) == SIP_DTMF_SHORTINFO));
+ 	return send_request(p, &req, XMIT_RELIABLE, p->ocseq);
+@@ -15613,7 +15627,7 @@ static int transmit_info_with_digit(struct sip_pvt *p, const char digit, unsigne
+ static int transmit_info_with_vidupdate(struct sip_pvt *p)
+ {
+ 	struct sip_request req;
+-	
++
+ 	reqprep(&req, p, SIP_INFO, 0, 1);
+ 	add_vidupdate(&req);
+ 	return send_request(p, &req, XMIT_RELIABLE, p->ocseq);
+@@ -15625,7 +15639,7 @@ static int transmit_info_with_vidupdate(struct sip_pvt *p)
+ static int transmit_request(struct sip_pvt *p, int sipmethod, uint32_t seqno, enum xmittype reliable, int newbranch)
+ {
+ 	struct sip_request resp;
+-	
++
+ 	reqprep(&resp, p, sipmethod, seqno, newbranch);
+ 	if (sipmethod == SIP_CANCEL && p->answered_elsewhere) {
+ 		add_header(&resp, "Reason", "SIP;cause=200;text=\"Call completed elsewhere\"");
+@@ -15657,7 +15671,7 @@ void sip_auth_headers(enum sip_auth_type code, char **header, char **respheader)
+ static int transmit_request_with_auth(struct sip_pvt *p, int sipmethod, uint32_t seqno, enum xmittype reliable, int newbranch)
+ {
+ 	struct sip_request resp;
+-	
++
+ 	reqprep(&resp, p, sipmethod, seqno, newbranch);
+ 	if (!ast_strlen_zero(p->realm)) {
+ 		char digest[1024];
+@@ -15699,7 +15713,7 @@ static int transmit_request_with_auth(struct sip_pvt *p, int sipmethod, uint32_t
+ 		break;
+ 	}
+ 
+-	return send_request(p, &resp, reliable, seqno ? seqno : p->ocseq);	
++	return send_request(p, &resp, reliable, seqno ? seqno : p->ocseq);
+ }
+ 
+ /*! \brief Remove registration data from realtime database or AST/DB when registration expires */
+@@ -15894,7 +15908,7 @@ static int parse_ok_contact(struct sip_pvt *pvt, struct sip_request *req)
+ 
+ 	/* We should return false for URI:s we can't handle,
+ 		like tel:, mailto:,ldap: etc */
+-	return TRUE;		
++	return TRUE;
+ }
+ 
+ /*! \brief parse uri in a way that allows semicolon stripping if legacy mode is enabled
+@@ -15925,7 +15939,7 @@ static int __set_address_from_contact(const char *fullcontact, struct ast_sockad
+ 	ast_copy_string(contact_buf, fullcontact, sizeof(contact_buf));
+ 	contact = contact_buf;
+ 
+-	/* 
++	/*
+ 	 * We have only the part in <brackets> here so we just need to parse a SIP URI.
+ 	 *
+ 	 * Note: The outbound proxy could be using UDP between the proxy and Asterisk.
+@@ -16219,7 +16233,7 @@ static void list_route(struct sip_route *route)
+ 	}
+ }
+ 
+-/*! \brief Build route list from Record-Route header 
++/*! \brief Build route list from Record-Route header
+     \param resp the SIP response code or 0 for a request */
+ static void build_route(struct sip_pvt *p, struct sip_request *req, int backwards, int resp)
+ {
+@@ -16339,7 +16353,7 @@ static void build_route(struct sip_pvt *p, struct sip_request *req, int backward
+ 	}
+ }
+ 
+-/*! \brief builds the sip_pvt's nonce field which is used for the authentication 
++/*! \brief builds the sip_pvt's nonce field which is used for the authentication
+  *  challenge.  When forceupdate is not set, the nonce is only updated if
+  *  the current one is stale.  In this case, a stalenonce is one which
+  *  has already received a response, if a nonce has not received a response
+@@ -17254,7 +17268,7 @@ static int get_pai(struct sip_pvt *p, struct sip_request *req)
+ 	if (!cid_name) {
+ 		no_name = 1;
+ 		cid_name = (char *)emptyname;
+-	}	
++	}
+ 	/* Only return true if the supplied caller id is different */
+ 	if (!strcasecmp(p->cid_num, cid_num) && !strcasecmp(p->cid_name, cid_name) && p->callingpres == callingpres) {
+ 		do_update = 0;
+@@ -17739,7 +17753,7 @@ static struct sip_pvt *get_sip_pvt_byid_locked(const char *callid, const char *t
+ 			sip_pvt_lock(sip_pvt_ptr);
+ 		}
+ 	}
+-	
++
+ 	return sip_pvt_ptr;
+ }
+ 
+@@ -17832,7 +17846,7 @@ static int get_refer_info(struct sip_pvt *transferer, struct sip_request *outgoi
+ 			to = strcasestr(ptr, "to-tag=");
+ 			from = strcasestr(ptr, "from-tag=");
+ 		}
+-		
++
+ 		/* Grab the to header */
+ 		if (to) {
+ 			ptr = to + 7;
+@@ -18745,7 +18759,7 @@ static char *sip_show_inuse(struct ast_cli_entry *e, int cmd, struct ast_cli_arg
+ 	int showall = FALSE;
+ 	struct ao2_iterator i;
+ 	struct sip_peer *peer;
+-	
++
+ 	switch (cmd) {
+ 	case CLI_INIT:
+ 		e->command = "sip show inuse";
+@@ -18763,7 +18777,7 @@ static char *sip_show_inuse(struct ast_cli_entry *e, int cmd, struct ast_cli_arg
+ 
+ 	if (a->argc == 4 && !strcmp(a->argv[3], "all"))
+ 		showall = TRUE;
+-	
++
+ 	ast_cli(a->fd, FORMAT, "* Peer name", "In use", "Limit");
+ 
+ 	i = ao2_iterator_init(peers, 0);
+@@ -19042,7 +19056,7 @@ static int manager_show_registry(struct mansession *s, const struct message *m)
+ 		"ListItems: %d\r\n"
+ 		"%s"
+ 		"\r\n", total, idtext);
+-	
++
+ 	return 0;
+ }
+ 
+@@ -19330,7 +19344,7 @@ static int peer_dump_func(void *userobj, void *arg, int flags)
+ 	struct sip_peer *peer = userobj;
+ 	int refc = ao2_t_ref(userobj, 0, "");
+ 	struct ast_cli_args *a = (struct ast_cli_args *) arg;
+-	
++
+ 	ast_cli(a->fd, "name: %s\ntype: peer\nobjflags: %d\nrefcount: %d\n\n",
+ 		peer->name, 0, refc);
+ 	return 0;
+@@ -19341,7 +19355,7 @@ static int dialog_dump_func(void *userobj, void *arg, int flags)
+ 	struct sip_pvt *pvt = userobj;
+ 	int refc = ao2_t_ref(userobj, 0, "");
+ 	struct ast_cli_args *a = (struct ast_cli_args *) arg;
+-	
++
+ 	ast_cli(a->fd, "name: %s\ntype: dialog\nobjflags: %d\nrefcount: %d\n\n",
+ 		pvt->callid, 0, refc);
+ 	return 0;
+@@ -19352,7 +19366,7 @@ static int dialog_dump_func(void *userobj, void *arg, int flags)
+ static char *sip_show_objects(struct ast_cli_entry *e, int cmd, struct ast_cli_args *a)
+ {
+ 	char tmp[256];
+-	
++
+ 	switch (cmd) {
+ 	case CLI_INIT:
+ 		e->command = "sip show objects";
+@@ -19362,13 +19376,13 @@ static char *sip_show_objects(struct ast_cli_entry *e, int cmd, struct ast_cli_a
+ 		return NULL;
+ 	case CLI_GENERATE:
+ 		return NULL;
+-	}	
++	}
+ 
+ 	if (a->argc != 3)
+ 		return CLI_SHOWUSAGE;
+ 	ast_cli(a->fd, "-= Peer objects: %d static, %d realtime, %d autocreate =-\n\n", speerobjs, rpeerobjs, apeerobjs);
+ 	ao2_t_callback(peers, OBJ_NODATA, peer_dump_func, a, "initiate ao2_callback to dump peers");
+-	ast_cli(a->fd, "-= Peer objects by IP =-\n\n"); 
++	ast_cli(a->fd, "-= Peer objects by IP =-\n\n");
+ 	ao2_t_callback(peers_by_ip, OBJ_NODATA, peer_dump_func, a, "initiate ao2_callback to dump peers_by_ip");
+ 	ast_cli(a->fd, "-= Registry objects: %d =-\n\n", regobjs);
+ 	ASTOBJ_CONTAINER_DUMP(a->fd, tmp, sizeof(tmp), &regl);
+@@ -19442,18 +19456,6 @@ static const char *allowoverlap2str(int mode)
+ 	return map_x_s(allowoverlapstr, mode, "<error>");
+ }
+ 
+-static const struct _map_x_s trust_id_outboundstr[] = {
+-	{ SIP_PAGE2_TRUST_ID_OUTBOUND_LEGACY,  "Legacy" },
+-	{ SIP_PAGE2_TRUST_ID_OUTBOUND_NO,      "No" },
+-	{ SIP_PAGE2_TRUST_ID_OUTBOUND_YES,     "Yes" },
+-	{ -1,                                  NULL }, /* terminator */
+-};
+-
+-static const char *trust_id_outbound2str(int mode)
+-{
+-	return map_x_s(trust_id_outboundstr, mode, "<error>");
+-}
+-
+ /*! \brief Destroy disused contexts between reloads
+ 	Only used in reload_config so the code for regcontext doesn't get ugly
+ */
+@@ -19473,7 +19475,7 @@ static void cleanup_stale_contexts(char *new, char *old)
+ 			} else if (strcmp(newcontext, oldcontext)) {
+ 				stalecontext = oldcontext;
+ 			}
+-			
++
+ 		}
+ 		if (stalecontext)
+ 			ast_context_destroy(ast_context_find(stalecontext), "SIP");
+@@ -19571,7 +19573,7 @@ static char *sip_prune_realtime(struct ast_cli_entry *e, int cmd, struct ast_cli
+ 	struct ao2_iterator i;
+ 	static const char * const choices[] = { "all", "like", NULL };
+ 	char *cmplt;
+-	
++
+ 	if (cmd == CLI_INIT) {
+ 		e->command = "sip prune realtime [peer|all]";
+ 		e->usage =
+@@ -19645,7 +19647,7 @@ static char *sip_prune_realtime(struct ast_cli_entry *e, int cmd, struct ast_cli
+ 	if (multi) {
+ 		if (prunepeer) {
+ 			int pruned = 0;
+-			
++
+ 			i = ao2_iterator_init(peers, 0);
+ 			while ((pi = ao2_t_iterator_next(&i, "iterate thru peers table"))) {
+ 				ao2_lock(pi);
+@@ -20093,7 +20095,6 @@ static char *_sip_show_peer(int type, int fd, struct mansession *s, const struct
+ 		ast_cli(fd, "  Ign SDP ver  : %s\n", AST_CLI_YESNO(ast_test_flag(&peer->flags[1], SIP_PAGE2_IGNORESDPVERSION)));
+ 		ast_cli(fd, "  Trust RPID   : %s\n", AST_CLI_YESNO(ast_test_flag(&peer->flags[0], SIP_TRUSTRPID)));
+ 		ast_cli(fd, "  Send RPID    : %s\n", AST_CLI_YESNO(ast_test_flag(&peer->flags[0], SIP_SENDRPID)));
+-		ast_cli(fd, "  TrustIDOutbnd: %s\n", trust_id_outbound2str(ast_test_flag(&peer->flags[1], SIP_PAGE2_TRUST_ID_OUTBOUND)));
+ 		ast_cli(fd, "  Subscriptions: %s\n", AST_CLI_YESNO(ast_test_flag(&peer->flags[1], SIP_PAGE2_ALLOWSUBSCRIBE)));
+ 		ast_cli(fd, "  Overlap dial : %s\n", allowoverlap2str(ast_test_flag(&peer->flags[1], SIP_PAGE2_ALLOWOVERLAP)));
+ 		if (peer->outboundproxy)
+@@ -20413,7 +20414,7 @@ static char *sip_show_sched(struct ast_cli_entry *e, int cmd, struct ast_cli_arg
+                                      sip_poke_noanswer,
+                                      sip_reregister,
+                                      sip_reinvite_retry}};
+-	
++
+ 	switch (cmd) {
+ 	case CLI_INIT:
+ 		e->command = "sip show sched";
+@@ -20459,7 +20460,7 @@ static char *sip_show_registry(struct ast_cli_entry *e, int cmd, struct ast_cli_
+ 	if (a->argc != 3)
+ 		return CLI_SHOWUSAGE;
+ 	ast_cli(a->fd, FORMAT2, "Host", "dnsmgr", "Username", "Refresh", "State", "Reg.Time");
+-	
++
+ 	ASTOBJ_CONTAINER_TRAVERSE(&regl, 1, do {
+ 		ASTOBJ_RDLOCK(iterator);
+ 		snprintf(host, sizeof(host), "%s:%d", iterator->hostname, iterator->portno ? iterator->portno : STANDARD_SIP_PORT);
+@@ -20504,10 +20505,10 @@ static char *sip_unregister(struct ast_cli_entry *e, int cmd, struct ast_cli_arg
+ 	case CLI_GENERATE:
+ 		return complete_sip_unregister(a->line, a->word, a->pos, a->n);
+ 	}
+-	
++
+ 	if (a->argc != 3)
+ 		return CLI_SHOWUSAGE;
+-	
++
+ 	if ((peer = sip_find_peer(a->argv[2], NULL, load_realtime, FINDPEERS, TRUE, 0))) {
+ 		if (peer->expire > 0) {
+ 			AST_SCHED_DEL_UNREF(sched, peer->expire,
+@@ -20521,7 +20522,7 @@ static char *sip_unregister(struct ast_cli_entry *e, int cmd, struct ast_cli_arg
+ 	} else {
+ 		ast_cli(a->fd, "Peer unknown: \'%s\'. Not unregistered.\n", a->argv[2]);
+ 	}
+-	
++
+ 	return CLI_SUCCESS;
+ }
+ 
+@@ -20848,7 +20849,7 @@ static char *sip_show_settings(struct ast_cli_entry *e, int cmd, struct ast_cli_
+ 	ast_cli(a->fd, "  MOH Suggest:            %s\n", default_mohsuggest);
+ 	ast_cli(a->fd, "  Voice Mail Extension:   %s\n", default_vmexten);
+ 
+-	
++
+ 	if (realtimepeers || realtimeregs) {
+ 		ast_cli(a->fd, "\nRealtime SIP Settings:\n");
+ 		ast_cli(a->fd, "----------------------\n");
+@@ -20868,7 +20869,7 @@ static char *sip_show_mwi(struct ast_cli_entry *e, int cmd, struct ast_cli_args
+ {
+ #define FORMAT  "%-30.30s  %-12.12s  %-10.10s  %-10.10s\n"
+ 	char host[80];
+-	
++
+ 	switch (cmd) {
+ 	case CLI_INIT:
+ 		e->command = "sip show mwi";
+@@ -20879,9 +20880,9 @@ static char *sip_show_mwi(struct ast_cli_entry *e, int cmd, struct ast_cli_args
+ 	case CLI_GENERATE:
+ 		return NULL;
+ 	}
+-	
++
+ 	ast_cli(a->fd, FORMAT, "Host", "Username", "Mailbox", "Subscribed");
+-	
++
+ 	ASTOBJ_CONTAINER_TRAVERSE(&submwil, 1, do {
+ 		ASTOBJ_RDLOCK(iterator);
+ 		snprintf(host, sizeof(host), "%s:%d", iterator->hostname, iterator->portno ? iterator->portno : STANDARD_SIP_PORT);
+@@ -20947,7 +20948,7 @@ static int show_channels_cb(void *__cur, void *__arg, int flags)
+ 		/* set if SIP transfer in progress */
+ 		const char *referstatus = cur->refer ? referstatus2str(cur->refer->status) : "";
+ 		char formatbuf[SIPBUFSIZE/2];
+-		
++
+ 		ast_cli(arg->fd, FORMAT, ast_sockaddr_stringify_addr(dst),
+ 				S_OR(cur->username, S_OR(cur->cid_num, "(None)")),
+ 				cur->callid,
+@@ -21011,7 +21012,7 @@ static char *sip_show_channels(struct ast_cli_entry *e, int cmd, struct ast_cli_
+ 
+ 	/* iterate on the container and invoke the callback on each item */
+ 	ao2_t_callback(dialogs, OBJ_NODATA, show_channels_cb, &arg, "callback to show channels");
+-	
++
+ 	/* print summary information */
+ 	ast_cli(arg.fd, "%d active SIP %s%s\n", arg.numchans,
+ 		(arg.subscriptions ? "subscription" : "dialog"),
+@@ -21088,7 +21089,7 @@ static char *complete_sip_registered_peer(const char *word, int state, int flags
+        int which = 0;
+        struct ao2_iterator i;
+        struct sip_peer *peer;
+-       
++
+        i = ao2_iterator_init(peers, 0);
+        while ((peer = ao2_t_iterator_next(&i, "iterate thru peers table"))) {
+ 	       if (!strncasecmp(word, peer->name, wordlen) &&
+@@ -21147,7 +21148,7 @@ static char *complete_sip_notify(const char *line, const char *word, int pos, in
+ 
+ 		if (!notify_types)
+ 			return NULL;
+-		
++
+ 		while ( (cat = ast_category_browse(notify_types, cat)) ) {
+ 			if (!strncasecmp(word, cat, wordlen) && ++which > state) {
+ 				c = ast_strdup(cat);
+@@ -21203,7 +21204,7 @@ static char *sip_show_channel(struct ast_cli_entry *e, int cmd, struct ast_cli_a
+ 	if (a->argc != 4)
+ 		return CLI_SHOWUSAGE;
+ 	len = strlen(a->argv[3]);
+-	
++
+ 	i = ao2_iterator_init(dialogs, 0);
+ 	while ((cur = ao2_t_iterator_next(&i, "iterate thru dialogs"))) {
+ 		sip_pvt_lock(cur);
+@@ -21982,7 +21983,7 @@ static int build_reply_digest(struct sip_pvt *p, int method, char* digest, int d
+ 	} else {
+ 		/* No authentication, use peer or register= config */
+ 		username = p->authname;
+- 		secret = p->relatedpeer 
++ 		secret = p->relatedpeer
+ 			&& !ast_strlen_zero(p->relatedpeer->remotesecret)
+ 				? p->relatedpeer->remotesecret : p->peersecret;
+ 		md5secret = p->peermd5secret;
+@@ -22029,7 +22030,7 @@ static int build_reply_digest(struct sip_pvt *p, int method, char* digest, int d
+ 	}
+ 	return 0;
+ }
+-	
++
+ /*! \brief Read SIP header (dialplan function) */
+ static int func_header_read(struct ast_channel *chan, const char *function, char *data, char *buf, size_t len)
+ {
+@@ -22482,7 +22483,7 @@ static void parse_moved_contact(struct sip_pvt *p, struct sip_request *req, char
+ 	}
+ }
+ 
+-/*! \brief Check pending actions on SIP call 
++/*! \brief Check pending actions on SIP call
+  *
+  * \note both sip_pvt and sip_pvt's owner channel (if present)
+  *  must be locked for this function.
+@@ -22755,7 +22756,7 @@ static void handle_response_invite(struct sip_pvt *p, int resp, const char *rest
+  	if (resp >= 300 && (p->invitestate == INV_CALLING || p->invitestate == INV_PROCEEDING || p->invitestate == INV_EARLY_MEDIA )) {
+  		p->invitestate = INV_COMPLETED;
+ 	}
+- 	
++
+ 	if ((resp >= 200 && reinvite)) {
+ 		p->ongoing_reinvite = 0;
+ 		if (p->reinviteid > -1) {
+@@ -23011,7 +23012,7 @@ static void handle_response_invite(struct sip_pvt *p, int resp, const char *rest
+ 				/* Bad contact - we don't know how to reach this device */
+ 				/* We need to ACK, but then send a bye */
+ 				if (!p->route && !req->ignore) {
+-					ast_set_flag(&p->flags[0], SIP_PENDINGBYE);	
++					ast_set_flag(&p->flags[0], SIP_PENDINGBYE);
+ 				}
+ 			}
+ 
+@@ -23037,7 +23038,7 @@ static void handle_response_invite(struct sip_pvt *p, int resp, const char *rest
+ 				  by sending CANCEL */
+ 			/* First send ACK, then send bye */
+ 			if (!req->ignore) {
+-				ast_set_flag(&p->flags[0], SIP_PENDINGBYE);	
++				ast_set_flag(&p->flags[0], SIP_PENDINGBYE);
+ 			}
+ 		}
+ 
+@@ -23050,7 +23051,7 @@ static void handle_response_invite(struct sip_pvt *p, int resp, const char *rest
+ 				int tmp_st_interval = 0;
+ 				rtn = parse_session_expires(p_hdrval, &tmp_st_interval, &st_ref_param);
+ 				if (rtn != 0) {
+-					ast_set_flag(&p->flags[0], SIP_PENDINGBYE);	
++					ast_set_flag(&p->flags[0], SIP_PENDINGBYE);
+ 				} else if (tmp_st_interval < st_get_se(p, FALSE)) {
+ 					ast_log(LOG_WARNING, "Got Session-Expires less than local Min-SE in 200 OK, tearing down call\n");
+ 					ast_set_flag(&p->flags[0], SIP_PENDINGBYE);
+@@ -23401,7 +23402,7 @@ static void handle_response_refer(struct sip_pvt *p, int resp, const char *rest,
+ 			pvt_set_needdestroy(p, "failed to authenticate REFER");
+ 		}
+ 		break;
+-	
++
+ 	case 405:   /* Method not allowed */
+ 		/* Return to the current call onhold */
+ 		/* Status flag needed to be reset */
+@@ -23445,7 +23446,7 @@ static void handle_response_refer(struct sip_pvt *p, int resp, const char *rest,
+ 		break;
+ 	default:
+ 		/* We should treat unrecognized 9xx as 900.  400 is actually
+-		   specified as a possible response, but any 4-6xx is 
++		   specified as a possible response, but any 4-6xx is
+ 		   theoretically possible. */
+ 
+ 		if (resp < 299) { /* 1xx cases don't get here */
+@@ -23469,7 +23470,7 @@ static int handle_response_register(struct sip_pvt *p, int resp, const char *res
+ 	int expires, expires_ms;
+ 	struct sip_registry *r;
+ 	r=p->registry;
+-	
++
+ 	switch (resp) {
+ 	case 401:	/* Unauthorized */
+ 		if (p->authtries == MAX_AUTHTRIES || do_register_auth(p, req, resp)) {
+@@ -23589,13 +23590,13 @@ static int handle_response_register(struct sip_pvt *p, int resp, const char *res
+ 					expires = 0;
+ 				}
+ 			}
+-			
++
+ 		}
+ 		if (!expires)
+ 			expires=atoi(sip_get_header(req, "expires"));
+ 		if (!expires)
+ 			expires=default_expiry;
+-		
++
+ 		expires_ms = expires * 1000;
+ 		if (expires <= EXPIRY_GUARD_LIMIT)
+ 			expires_ms -= MAX((expires_ms * EXPIRY_GUARD_PCT), EXPIRY_GUARD_MIN);
+@@ -23603,9 +23604,9 @@ static int handle_response_register(struct sip_pvt *p, int resp, const char *res
+ 			expires_ms -= EXPIRY_GUARD_SECS * 1000;
+ 		if (sipdebug)
+ 			ast_log(LOG_NOTICE, "Outbound Registration: Expiry for %s is %d sec (Scheduling reregistration in %d s)\n", r->hostname, expires, expires_ms/1000);
+-		
++
+ 		r->refresh= (int) expires_ms / 1000;
+-		
++
+ 		/* Schedule re-registration before we expire */
+ 		AST_SCHED_REPLACE_UNREF(r->expire, sched, expires_ms, sip_reregister, r,
+ 								registry_unref(_data,"unref in REPLACE del fail"),
+@@ -24091,7 +24092,7 @@ static void handle_response(struct sip_pvt *p, int resp, const char *rest, struc
+ 				/* Fatal response */
+ 				if ((resp != 487))
+ 					ast_verb(3, "Got SIP response %d \"%s\" back from %s\n", resp, rest, ast_sockaddr_stringify(&p->sa));
+-	
++
+ 				if (sipmethod == SIP_INVITE)
+ 					stop_media_flows(p); /* Immediately stop RTP, VRTP and UDPTL as applicable */
+ 
+@@ -24152,7 +24153,7 @@ static void handle_response(struct sip_pvt *p, int resp, const char *rest, struc
+ 					}
+ 					break;
+ 				default:
+-					/* Send hangup */	
++					/* Send hangup */
+ 					if (owner && sipmethod != SIP_BYE)
+ 						ast_queue_hangup_with_cause(p->owner, hangup_sip2cause(resp));
+ 					break;
+@@ -24178,7 +24179,7 @@ static void handle_response(struct sip_pvt *p, int resp, const char *rest, struc
+ 			} else
+ 				ast_log(LOG_NOTICE, "Don't know how to handle a %d %s response from %s\n", resp, rest, p->owner ? ast_channel_name(p->owner) : ast_sockaddr_stringify(&p->sa));
+ 		}
+-	} else {	
++	} else {
+ 		/* Responses to OUTGOING SIP requests on INCOMING calls
+ 		   get handled here. As well as out-of-call message responses */
+ 		if (req->debug)
+@@ -24681,7 +24682,7 @@ static int handle_request_notify(struct sip_pvt *p, struct sip_request *req, str
+ 		A minimal, but complete, implementation can respond with a single
+ 		NOTIFY containing either the body:
+ 			SIP/2.0 100 Trying
+-		
++
+ 		if the subscription is pending, the body:
+ 			SIP/2.0 200 OK
+ 		if the reference was successful, the body:
+@@ -24692,7 +24693,7 @@ static int handle_request_notify(struct sip_pvt *p, struct sip_request *req, str
+ 		if the REFER request was accepted before approval to follow the
+ 		reference could be obtained and that approval was subsequently denied
+ 		(see Section 2.4.7).
+-		
++
+ 		If there are several REFERs in the same dialog, we need to
+ 		match the ID of the event header...
+ 		*/
+@@ -26048,7 +26049,7 @@ static void parse_oli(struct sip_request *req, struct ast_channel *chan)
+ /*! \brief  Find all call legs and bridge transferee with target
+  *	called from handle_request_refer
+  *
+- *	\note this function assumes two locks to begin with, sip_pvt transferer and current.chan1 (the pvt's owner)... 
++ *	\note this function assumes two locks to begin with, sip_pvt transferer and current.chan1 (the pvt's owner)...
+  *	2 additional locks are held at the beginning of the function, targetcall_pvt, and targetcall_pvt's owner
+  *	channel (which is stored in target.chan1).  These 2 locks _MUST_ be let go by the end of the function.  Do
+  *	not be confused into thinking a pvt's owner is the same thing as the channels locked at the beginning of
+@@ -26317,9 +26318,9 @@ static int local_attended_transfer(struct sip_pvt *transferer, struct sip_dual *
+ 	inform the target about the transferor
+ 
+ 	"Any REFER request has to be appropriately authenticated.".
+-	
++
+ 	We can't destroy dialogs, since we want the call to continue.
+-	
++
+ 	*/
+ static int handle_request_refer(struct sip_pvt *p, struct sip_request *req, uint32_t seqno, int *nounlock)
+ {
+@@ -26454,12 +26455,12 @@ static int handle_request_refer(struct sip_pvt *p, struct sip_request *req, uint
+ 	- chan1, chan2: The call between the transferer and transferee (2 channels)
+ 	- target_channel, targetcall_pvt: The call between the transferer and the target (2 channels)
+ 	We want to bridge chan2 with targetcall_pvt!
+-	
++
+ 	The replaces call id in the refer message points
+ 	to the call leg between Asterisk and the transferer.
+ 	So we need to connect the target and the transferee channel
+ 	and hangup the two other channels silently
+-	
++
+ 	If the target is non-local, the call ID could be on a remote
+ 	machine and we need to send an INVITE with replaces to the
+ 	target. We basically handle this as a blind transfer
+@@ -26654,7 +26655,7 @@ static int handle_request_refer(struct sip_pvt *p, struct sip_request *req, uint
+ 		*/
+ 		p->refer->status = REFER_FAILED;
+ 		transmit_notify_with_sipfrag(p, seqno, "503 Service Unavailable (can't handle one-legged xfers)", TRUE);
+-		ast_clear_flag(&p->flags[0], SIP_GOTREFER);	
++		ast_clear_flag(&p->flags[0], SIP_GOTREFER);
+ 		append_history(p, "Xfer", "Refer failed (only bridged calls).");
+ 		res = -1;
+ 		goto handle_refer_cleanup;
+@@ -29461,11 +29462,11 @@ int st_get_se(struct sip_pvt *p, int max)
+ 		}
+ 		p->stimer->st_cached_max_se = global_max_se;
+ 		return (p->stimer->st_cached_max_se);
+-	} 
++	}
+ 	/* Find Min SE timer */
+ 	if (p->stimer->st_cached_min_se) {
+ 		return p->stimer->st_cached_min_se;
+-	} 
++	}
+ 	if (p->relatedpeer) {
+ 		p->stimer->st_cached_min_se = p->relatedpeer->stimer.st_min_se;
+ 		return (p->stimer->st_cached_min_se);
+@@ -29491,15 +29492,15 @@ enum st_refresher st_get_refresher(struct sip_pvt *p)
+ 		p->stimer->st_cached_ref = (p->relatedpeer->stimer.st_ref == SESSION_TIMER_REFRESHER_PARAM_UAC) ? SESSION_TIMER_REFRESHER_THEM : SESSION_TIMER_REFRESHER_US;
+ 		return p->stimer->st_cached_ref;
+ 	}
+-	
++
+ 	p->stimer->st_cached_ref = (global_st_refresher == SESSION_TIMER_REFRESHER_PARAM_UAC) ? SESSION_TIMER_REFRESHER_THEM : SESSION_TIMER_REFRESHER_US;
+ 	return p->stimer->st_cached_ref;
+ }
+ 
+ 
+ /*!
+- * \brief Get the session-timer mode 
+- * \param p pointer to the SIP dialog 
++ * \brief Get the session-timer mode
++ * \param p pointer to the SIP dialog
+  * \param no_cached, set this to true in order to force a peername lookup on
+  *        the session timer mode.
+ */
+@@ -29630,13 +29631,13 @@ static int sip_poke_peer(struct sip_peer *peer, int force)
+ {
+ 	struct sip_pvt *p;
+ 	int xmitres = 0;
+-	
++
+ 	if ((!peer->maxms && !force) || ast_sockaddr_isnull(&peer->addr)) {
+ 		/* IF we have no IP, or this isn't to be monitored, return
+ 		  immediately after clearing things out */
+ 		AST_SCHED_DEL_UNREF(sched, peer->pokeexpire,
+ 				sip_unref_peer(peer, "removing poke peer ref"));
+-		
++
+ 		peer->lastms = 0;
+ 		if (peer->call) {
+ 			peer->call = dialog_unref(peer->call, "unref dialog peer->call");
+@@ -29687,7 +29688,7 @@ static int sip_poke_peer(struct sip_peer *peer, int force)
+ 
+ 	AST_SCHED_DEL_UNREF(sched, peer->pokeexpire,
+ 			sip_unref_peer(peer, "removing poke peer ref"));
+-	
++
+ 	if (p->relatedpeer)
+ 		p->relatedpeer = sip_unref_peer(p->relatedpeer,"unsetting the relatedpeer field in the dialog, before it is set to something else.");
+ 	p->relatedpeer = sip_ref_peer(peer, "setting the relatedpeer field in the dialog");
+@@ -29731,7 +29732,7 @@ static int sip_poke_peer(struct sip_peer *peer, int force)
+ 		- not registered			AST_DEVICE_UNAVAILABLE
+ 		- registered				AST_DEVICE_NOT_INUSE
+ 		- fixed IP (!dynamic)			AST_DEVICE_NOT_INUSE
+-	
++
+ 	Peers that does not have a known call and can't be reached by OPTIONS
+ 		- unreachable				AST_DEVICE_UNAVAILABLE
+ 
+@@ -30015,7 +30016,7 @@ static struct ast_channel *sip_request_call(const char *type, struct ast_format_
+ 
+ 	/* We have an extension to call, don't use the full contact here */
+ 	/* This to enable dialing registered peers with extension dialling,
+-	   like SIP/peername/extension 	
++	   like SIP/peername/extension
+ 	   SIP/peername will still use the full contact
+ 	 */
+ 	if (ext) {
+@@ -30154,19 +30155,6 @@ static int handle_common_options(struct ast_flags *flags, struct ast_flags *mask
+ 	} else if (!strcasecmp(v->name, "rpid_immediate")) {
+ 		ast_set_flag(&mask[1], SIP_PAGE2_RPID_IMMEDIATE);
+ 		ast_set2_flag(&flags[1], ast_true(v->value), SIP_PAGE2_RPID_IMMEDIATE);
+-	} else if (!strcasecmp(v->name, "trust_id_outbound")) {
+-		ast_set_flag(&mask[1], SIP_PAGE2_TRUST_ID_OUTBOUND);
+-		ast_clear_flag(&flags[1], SIP_PAGE2_TRUST_ID_OUTBOUND);
+-		if (!strcasecmp(v->value, "legacy")) {
+-			ast_set_flag(&flags[1], SIP_PAGE2_TRUST_ID_OUTBOUND_LEGACY);
+-		} else if (ast_true(v->value)) {
+-			ast_set_flag(&flags[1], SIP_PAGE2_TRUST_ID_OUTBOUND_YES);
+-		} else if (ast_false(v->value)) {
+-			ast_set_flag(&flags[1], SIP_PAGE2_TRUST_ID_OUTBOUND_NO);
+-		} else {
+-			ast_log(LOG_WARNING, "Unknown trust_id_outbound mode '%s' on line %d, using legacy\n", v->value, v->lineno);
+-			ast_set_flag(&flags[1], SIP_PAGE2_TRUST_ID_OUTBOUND_LEGACY);
+-		}
+ 	} else if (!strcasecmp(v->name, "g726nonstandard")) {
+ 		ast_set_flag(&mask[0], SIP_G726_NONSTANDARD);
+ 		ast_set2_flag(&flags[0], ast_true(v->value), SIP_G726_NONSTANDARD);
+@@ -30220,7 +30208,7 @@ static int handle_common_options(struct ast_flags *flags, struct ast_flags *mask
+ 	} else if (!strcasecmp(v->name, "insecure")) {
+ 		ast_set_flag(&mask[0], SIP_INSECURE);
+ 		ast_clear_flag(&flags[0], SIP_INSECURE);
+-		set_insecure_flags(&flags[0], v->value, v->lineno);	
++		set_insecure_flags(&flags[0], v->value, v->lineno);
+ 	} else if (!strcasecmp(v->name, "progressinband")) {
+ 		ast_set_flag(&mask[0], SIP_PROG_INBAND);
+ 		ast_clear_flag(&flags[0], SIP_PROG_INBAND);
+@@ -30474,7 +30462,7 @@ static struct ast_variable *add_var(const char *buf, struct ast_variable *list)
+ {
+ 	struct ast_variable *tmpvar = NULL;
+ 	char *varname = ast_strdupa(buf), *varval = NULL;
+-	
++
+ 	if ((varval = strchr(varname, '='))) {
+ 		*varval++ = '\0';
+ 		if ((tmpvar = ast_variable_new(varname, varval, ""))) {
+@@ -30568,7 +30556,7 @@ static struct sip_peer *temp_peer(const char *name)
+ 		ao2_t_ref(peer, -1, "failed to string_field_init, drop peer");
+ 		return NULL;
+ 	}
+-	
++
+ 	if (!(peer->cc_params = ast_cc_config_params_init())) {
+ 		ao2_t_ref(peer, -1, "failed to allocate cc_params for peer");
+ 		return NULL;
+@@ -31297,26 +31285,21 @@ static struct sip_peer *build_peer(const char *name, struct ast_variable *v, str
+ 		peer->socket.port = htons(((peer->socket.type & SIP_TRANSPORT_TLS) ? STANDARD_TLS_PORT : STANDARD_SIP_PORT));
+ 	}
+ 
+-	if (realtime) {
+-		int enablepoke = 1;
+-
+-		if (!sip_cfg.ignore_regexpire && peer->host_dynamic) {
+-			time_t nowtime = time(NULL);
++	if (!sip_cfg.ignore_regexpire && peer->host_dynamic && realtime) {
++		time_t nowtime = time(NULL);
+ 
+-			if ((nowtime - regseconds) > 0) {
+-				destroy_association(peer);
+-				memset(&peer->addr, 0, sizeof(peer->addr));
+-				peer->lastms = -1;
+-				enablepoke = 0;
+-				ast_debug(1, "Bah, we're expired (%d/%d/%d)!\n", (int)(nowtime - regseconds), (int)regseconds, (int)nowtime);
+-			}
++		if ((nowtime - regseconds) > 0) {
++			destroy_association(peer);
++			memset(&peer->addr, 0, sizeof(peer->addr));
++			peer->lastms = -1;
++			ast_debug(1, "Bah, we're expired (%d/%d/%d)!\n", (int)(nowtime - regseconds), (int)regseconds, (int)nowtime);
+ 		}
++	}
+ 
+-		/* Startup regular pokes */
+-		if (!devstate_only && enablepoke) {
+-			sip_ref_peer(peer, "schedule qualify");
+-			sip_poke_peer(peer, 0);
+-		}
++	/* Startup regular pokes */
++	if (!devstate_only && realtime && peer->lastms > 0) {
++		sip_ref_peer(peer, "schedule qualify");
++		sip_poke_peer(peer, 0);
+ 	}
+ 
+ 	if (ast_test_flag(&peer->flags[1], SIP_PAGE2_ALLOWSUBSCRIBE)) {
+@@ -31378,7 +31361,7 @@ static int peer_markall_autopeers_func(void *device, void *arg, int flags)
+ 
+ /*!
+  * \internal
+- * \brief If no default formats are set in config, these are used 
++ * \brief If no default formats are set in config, these are used
+  */
+ static void sip_set_default_format_capabilities(struct ast_format_cap *cap)
+ {
+@@ -32416,7 +32399,7 @@ static int reload_config(enum channelreloadreason reason)
+ 		struct ast_variable *gen;
+ 		int genhassip, genregistersip;
+ 		const char *hassip, *registersip;
+-		
++
+ 		genhassip = ast_true(ast_variable_retrieve(ucfg, "general", "hassip"));
+ 		genregistersip = ast_true(ast_variable_retrieve(ucfg, "general", "registersip"));
+ 		gen = ast_variable_browse(ucfg, "general");
+@@ -32434,7 +32417,7 @@ static int reload_config(enum channelreloadreason reason)
+ 						if ((peer->type & SIP_TYPE_PEER) && !ast_sockaddr_isnull(&peer->addr)) {
+ 							ao2_t_link(peers_by_ip, peer, "link peer into peers_by_ip table");
+ 						}
+-						
++
+ 						sip_unref_peer(peer, "sip_unref_peer: from reload_config");
+ 						peer_count++;
+ 					}
+@@ -32561,7 +32544,7 @@ static int reload_config(enum channelreloadreason reason)
+ 		if (!ast_strlen_zero(externhost)) {
+ 			add_sip_domain(externhost, SIP_DOMAIN_AUTO, NULL);
+ 		}
+-		
++
+ 		/* Our host name */
+ 		if (!gethostname(temp, sizeof(temp))) {
+ 			add_sip_domain(temp, SIP_DOMAIN_AUTO, NULL);
+@@ -32618,7 +32601,7 @@ static struct ast_udptl *sip_get_udptl_peer(struct ast_channel *chan)
+ {
+ 	struct sip_pvt *p;
+ 	struct ast_udptl *udptl = NULL;
+-	
++
+ 	p = ast_channel_tech_pvt(chan);
+ 	if (!p) {
+ 		return NULL;
+@@ -33051,7 +33034,7 @@ static int sip_addheader(struct ast_channel *chan, const char *data)
+ 	char varbuf[30];
+ 	const char *inbuf = data;
+ 	char *subbuf;
+-	
++
+ 	if (ast_strlen_zero(inbuf)) {
+ 		ast_log(LOG_WARNING, "This application requires the argument: Header\n");
+ 		return 0;
+@@ -33352,11 +33335,6 @@ static int process_crypto(struct sip_pvt *p, struct ast_rtp_instance *rtp, struc
+ 
+ 	ast_set_flag(*srtp, SRTP_CRYPTO_OFFER_OK);
+ 
+-	if ((dtls = ast_rtp_instance_get_dtls(rtp))) {
+-		dtls->stop(rtp);
+-		p->dtls_cfg.enabled = 0;
+-	}
+-
+ 	return TRUE;
+ }
+ 
+@@ -33817,7 +33795,7 @@ AST_TEST_DEFINE(test_sip_mwi_subscribe_parse)
+ 			ast_test_status_update(test, "sip_subscribe_mwi test 5 failed\n");
+ 		}
+ 	}
+-	
++
+ 	if (sip_subscribe_mwi(mwi6, 1)) {
+ 		res = AST_TEST_PASS;
+ 	} else {
+@@ -34798,7 +34776,7 @@ static int unload_module(void)
+ 	acl_change_event_unsubscribe();
+ 
+ 	ast_sched_dump(sched);
+-	
++
+ 	/* First, take us out of the channel type list */
+ 	ast_channel_unregister(&sip_tech);
+ 
+@@ -34841,7 +34819,7 @@ static int unload_module(void)
+ 	ast_manager_unregister("SIPshowregistry");
+ 	ast_manager_unregister("SIPnotify");
+ 	ast_manager_unregister("SIPpeerstatus");
+-	
++
+ 	/* Kill TCP/TLS server threads */
+ 	if (sip_tcp_desc.master) {
+ 		ast_tcptls_server_stop(&sip_tcp_desc);
+diff --git a/include/asterisk/rtp_engine.h b/include/asterisk/rtp_engine.h
+index 91e6335..d59c420 100644
+--- a/include/asterisk/rtp_engine.h
++++ b/include/asterisk/rtp_engine.h
+@@ -375,7 +375,11 @@ enum ast_rtp_dtls_connection {
+ 
+ /*! \brief DTLS fingerprint hashes */
+ enum ast_rtp_dtls_hash {
++	AST_RTP_DTLS_HASH_NONE, /* Uninitialized */
+ 	AST_RTP_DTLS_HASH_SHA1, /*!< SHA-1 fingerprint hash */
++	/*SRTP_DTLS */
++	AST_RTP_DTLS_HASH_SHA256, /*!< SHA-256 fingerprint hash */
++	/*SRTP_DTLS */
+ };
+ 
+ /*! \brief DTLS configuration structure */
+@@ -411,7 +415,7 @@ struct ast_rtp_engine_dtls {
+ 	/*! Set the remote fingerprint */
+ 	void (*set_fingerprint)(struct ast_rtp_instance *instance, enum ast_rtp_dtls_hash hash, const char *fingerprint);
+ 	/*! Get the local fingerprint */
+-	const char *(*get_fingerprint)(struct ast_rtp_instance *instance, enum ast_rtp_dtls_hash hash);
++	const char *(*get_fingerprint)(struct ast_rtp_instance *instance, const struct ast_rtp_dtls_cfg *dtls_cfg, enum ast_rtp_dtls_hash hash);
+ };
+ 
+ /*! Structure that represents an RTP stack (engine) */
+diff --git a/res/res_rtp_asterisk.c b/res/res_rtp_asterisk.c
+index 4853a0f..56e4000 100644
+--- a/res/res_rtp_asterisk.c
++++ b/res/res_rtp_asterisk.c
+@@ -128,6 +128,8 @@ static int rtpend = DEFAULT_RTP_END;			/*!< Last port for RTP sessions (set in r
+ static int rtpdebug;			/*!< Are we debugging? */
+ static int rtcpdebug;			/*!< Are we debugging RTCP? */
+ static int rtcpstats;			/*!< Are we debugging RTCP? */
++/* SRTP_DTLS */
++static int dtlsdebug;
+ static int rtcpinterval = RTCP_DEFAULT_INTERVALMS; /*!< Time between rtcp reports in millisecs */
+ static struct ast_sockaddr rtpdebugaddr;	/*!< Debug packets to/from this host */
+ static struct ast_sockaddr rtcpdebugaddr;	/*!< Debug RTCP packets to/from this host */
+@@ -268,6 +270,13 @@ struct ast_rtp {
+ 	ast_cond_t cond;            /*!< Condition for signaling */
+ 	unsigned int passthrough:1; /*!< Bit to indicate that the received packet should be passed through */
+ 	unsigned int ice_port;      /*!< Port that ICE was started with if it was previously started */
++	/* SRTP_DTLS */
++	unsigned int icecomplete:1; /*!< Bit to indicate ICE connectivity checks have completed */
++	unsigned int icedone:1;     /*!< Bit to indicate ICE connectivity checks have completed (go on with RTP or DTLS) */
++	unsigned int dtlsinit:1;    /*!< Bit to indicate DTLS-SRTP setup has been started (whether to start DTLS or not) */
++	unsigned int dtlsdone:1;    /*!< Bit to indicate DTLS-SRTP setup has been completed (go on with RTP or DTLS) */
++	struct ast_rtp_instance *instance;
++	/* SRTP_DTLS */
+ 
+ 	char remote_ufrag[256];  /*!< The remote ICE username */
+ 	char remote_passwd[256]; /*!< The remote ICE password */
+@@ -290,7 +299,9 @@ struct ast_rtp {
+ 	enum ast_rtp_dtls_setup dtls_setup; /*!< Current setup state */
+ 	enum ast_srtp_suite suite;   /*!< SRTP crypto suite */
+ 	char local_fingerprint[160]; /*!< Fingerprint of our certificate */
++	enum ast_rtp_dtls_hash local_fingerprint_type; /*!< Local fingerprint type */
+ 	unsigned char remote_fingerprint[EVP_MAX_MD_SIZE]; /*!< Fingerprint of the peer certificate */
++	enum ast_rtp_dtls_hash remote_fingerprint_type; /*!< Remote fingerprint type */
+ 	enum ast_rtp_dtls_connection connection; /*!< Whether this is a new or existing connection */
+ 	unsigned int dtls_failure:1; /*!< Failure occurred during DTLS negotiation */
+ 	unsigned int rekey; /*!< Interval at which to renegotiate and rekey */
+@@ -358,6 +369,26 @@ struct ast_rtcp {
+ 	double normdevrtt;
+ 	double stdevrtt;
+ 	unsigned int rtt_count;
++	/* SRTP_DTLS */
++	unsigned int icecomplete:1; /*!< Bit to indicate ICE connectivity checks have completed */
++	unsigned int icedone:1; /*!< Bit to indicate ICE connectivity checks have completed (go on with RTCP or DTLS) */
++	unsigned int dtlsdone:1; /*!< Bit to indicate DTLS-SRTP setup has been completed (go on with RTCP or DTLS) */
++#ifdef HAVE_OPENSSL_SRTP
++	SSL_CTX *ssl_ctx; /*!< SSL context */
++	SSL *ssl;         /*!< SSL session */
++	BIO *read_bio;    /*!< Memory buffer for reading */
++	BIO *write_bio;   /*!< Memory buffer for writing */
++	enum ast_rtp_dtls_setup dtls_setup; /*!< Current setup state */
++	enum ast_srtp_suite suite;   /*!< SRTP crypto suite */
++	char local_fingerprint[160]; /*!< Fingerprint of our certificate */
++	unsigned char remote_fingerprint[EVP_MAX_MD_SIZE]; /*!< Fingerprint of the peer certificate */
++	enum ast_rtp_dtls_connection connection; /*!< Whether this is a new or existing connection */
++	unsigned int dtls_failure:1; /*!< Failure occurred during DTLS negotiation */
++	unsigned int rekey; /*!< Interval at which to renegotiate and rekey */
++	int rekeyid; /*!< Scheduled item id for rekeying */
++#endif
++	/* SRTP_DTLS */
++
+ };
+ 
+ struct rtp_red {
+@@ -406,6 +437,9 @@ static int ast_rtp_sendcng(struct ast_rtp_instance *instance, int level);
+ #ifdef HAVE_OPENSSL_SRTP
+ static int ast_rtp_activate(struct ast_rtp_instance *instance);
+ static void dtls_srtp_check_pending(struct ast_rtp_instance *instance, struct ast_rtp *rtp);
++/* SRTP_DTLS DTLS certificate verification callback */
++static int dtls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx);
++/* SRTP_DTLS */
+ #endif
+ 
+ static int __rtp_sendto(struct ast_rtp_instance *instance, void *buf, size_t size, int flags, struct ast_sockaddr *sa, int rtcp, int *ice, int use_srtp);
+@@ -791,6 +825,10 @@ static void dtls_info_callback(const SSL *ssl, int where, int ret)
+ 	if (!(where & SSL_CB_ALERT)) {
+ 		return;
+ 	}
++	/* SRTP_DTLS */
++	ast_verbose(VERBOSE_PREFIX_3 "dtls_info_callback: %s, where=%d, ret=%d\n", (where & SSL_CB_READ)?"read":"write", where, ret);
++	ast_verbose(VERBOSE_PREFIX_3 "  >> %s, %s, %s\n", SSL_state_string(ssl), SSL_alert_type_string(ret), SSL_alert_desc_string(ret));
++	/* SRTP_DTLS */
+ 
+ 	rtp->dtls_failure = 1;
+ }
+@@ -811,7 +849,9 @@ static int ast_rtp_dtls_set_configuration(struct ast_rtp_instance *instance, con
+ 		return -1;
+ 	}
+ 
+-	SSL_CTX_set_verify(rtp->ssl_ctx, dtls_cfg->verify ? SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT : SSL_VERIFY_NONE, NULL);
++	/* SRTP_DTLS */
++	SSL_CTX_set_verify(rtp->ssl_ctx, dtls_cfg->verify ? SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT : SSL_VERIFY_NONE, dtls_verify_callback);
++	/* SRTP_DTLS */
+ 
+ 	if (dtls_cfg->suite == AST_AES_CM_128_HMAC_SHA1_80) {
+ 		SSL_CTX_set_tlsext_use_srtp(rtp->ssl_ctx, "SRTP_AES128_CM_SHA1_80");
+@@ -851,12 +891,14 @@ static int ast_rtp_dtls_set_configuration(struct ast_rtp_instance *instance, con
+ 
+ 		if (!BIO_read_filename(certbio, dtls_cfg->certfile) ||
+ 		    !(cert = PEM_read_bio_X509(certbio, NULL, 0, NULL)) ||
+-		    !X509_digest(cert, EVP_sha1(), fingerprint, &size) ||
++		    !X509_digest(cert, EVP_sha256(), fingerprint, &size) ||
+ 		    !size) {
+ 			ast_log(LOG_ERROR, "Could not produce fingerprint from certificate '%s' for RTP instance '%p'\n",
+ 				dtls_cfg->certfile, instance);
+ 			BIO_free_all(certbio);
+ 			goto error;
++		} else {
++			rtp->local_fingerprint_type = AST_RTP_DTLS_HASH_SHA256;
+ 		}
+ 
+ 		for (i = 0; i < size; i++) {
+@@ -922,6 +964,111 @@ static int ast_rtp_dtls_set_configuration(struct ast_rtp_instance *instance, con
+ 
+ 	rtp->connection = AST_RTP_DTLS_CONNECTION_NEW;
+ 
++	/* SRTP_DTLS: do the same with RTCP */
++	if (!(rtp->rtcp->ssl_ctx = SSL_CTX_new(DTLSv1_method()))) {
++			return -1;
++	}
++	SSL_CTX_set_verify(rtp->rtcp->ssl_ctx, dtls_cfg->verify ? SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT : SSL_VERIFY_NONE, NULL);
++	if (dtls_cfg->suite == AST_AES_CM_128_HMAC_SHA1_80) {
++		SSL_CTX_set_tlsext_use_srtp(rtp->rtcp->ssl_ctx, "SRTP_AES128_CM_SHA1_80");
++	} else if (dtls_cfg->suite == AST_AES_CM_128_HMAC_SHA1_32) {
++		SSL_CTX_set_tlsext_use_srtp(rtp->rtcp->ssl_ctx, "SRTP_AES128_CM_SHA1_32");
++	} else {
++		ast_log(LOG_ERROR, "Unsupported suite specified for DTLS-SRTP on RTCP instance '%p'\n", instance);
++		goto error;
++	}
++	if (!ast_strlen_zero(dtls_cfg->certfile)) {
++		char *private = ast_strlen_zero(dtls_cfg->pvtfile) ? dtls_cfg->certfile : dtls_cfg->pvtfile;
++		BIO *certbio;
++		X509 *cert;
++		unsigned int size, i;
++		unsigned char fingerprint[EVP_MAX_MD_SIZE];
++		char *local_fingerprint = rtp->rtcp->local_fingerprint;
++		if (!SSL_CTX_use_certificate_file(rtp->rtcp->ssl_ctx, dtls_cfg->certfile, SSL_FILETYPE_PEM)) {
++			ast_log(LOG_ERROR, "Specified certificate file '%s' for RTCP instance '%p' could not be used\n",
++				dtls_cfg->certfile, instance);
++			goto error;
++		}
++		if (!SSL_CTX_use_PrivateKey_file(rtp->rtcp->ssl_ctx, private, SSL_FILETYPE_PEM) ||
++		    !SSL_CTX_check_private_key(rtp->rtcp->ssl_ctx)) {
++				ast_log(LOG_ERROR, "Specified private key file '%s' for RTCP instance '%p' could not be used\n",
++					private, instance);
++			goto error;
++		}
++		if (!(certbio = BIO_new(BIO_s_file()))) {
++			ast_log(LOG_ERROR, "Failed to allocate memory for certificate fingerprinting on RTCP instance '%p'\n",
++				instance);
++			goto error;
++		}
++		if (!(certbio = BIO_new(BIO_s_file()))) {
++			ast_log(LOG_ERROR, "Failed to allocate memory for certificate fingerprinting on RTCP instance '%p'\n",
++				instance);
++			goto error;
++		}
++		if (!BIO_read_filename(certbio, dtls_cfg->certfile) ||
++			!(cert = PEM_read_bio_X509(certbio, NULL, 0, NULL)) ||
++			/* SRTP_DTLS: use SHA256 for DTLS-SRTP Fingerprint */
++			!X509_digest(cert, EVP_sha256(), fingerprint, &size) ||
++			!size) {
++			ast_log(LOG_ERROR, "Could not produce fingerprint from certificate '%s' for RTCP instance '%p'\n",
++				dtls_cfg->certfile, instance);
++			BIO_free_all(certbio);
++			goto error;
++		}
++		for (i = 0; i < size; i++) {
++			sprintf(local_fingerprint, "%.2X:", fingerprint[i]);
++			local_fingerprint += 3;
++		}
++		*(local_fingerprint-1) = 0;
++		BIO_free_all(certbio);
++	}
++
++	if (!ast_strlen_zero(dtls_cfg->cipher)) {
++		if (!SSL_CTX_set_cipher_list(rtp->rtcp->ssl_ctx, dtls_cfg->cipher)) {
++			ast_log(LOG_ERROR, "Invalid cipher specified in cipher list '%s' for RTCP instance '%p'\n",
++				dtls_cfg->cipher, instance);
++			goto error;
++		}
++	}
++	if (!ast_strlen_zero(dtls_cfg->cafile) || !ast_strlen_zero(dtls_cfg->capath)) {
++		if (!SSL_CTX_load_verify_locations(rtp->rtcp->ssl_ctx, S_OR(dtls_cfg->cafile, NULL), S_OR(dtls_cfg->capath, NULL))) {
++			ast_log(LOG_ERROR, "Invalid certificate authority file '%s' or path '%s' specified for RTCP instance '%p'\n",
++				S_OR(dtls_cfg->cafile, ""), S_OR(dtls_cfg->capath, ""), instance);
++			goto error;
++		}
++	}
++
++	rtp->rtcp->rekey = dtls_cfg->rekey;
++	rtp->rtcp->dtls_setup = dtls_cfg->default_setup;
++	rtp->rtcp->suite = dtls_cfg->suite;
++	if (!(rtp->rtcp->ssl = SSL_new(rtp->rtcp->ssl_ctx))) {
++		ast_log(LOG_ERROR, "Failed to allocate memory for SSL context on RTCP instance '%p'\n",
++			instance);
++		goto error;
++	}
++	SSL_set_ex_data(rtp->rtcp->ssl, 0, rtp);
++	SSL_set_info_callback(rtp->rtcp->ssl, dtls_info_callback);
++	if (!(rtp->rtcp->read_bio = BIO_new(BIO_s_mem()))) {
++		ast_log(LOG_ERROR, "Failed to allocate memory for inbound SSL traffic on RTCP instance '%p'\n",
++			instance);
++		goto error;
++	}
++	BIO_set_mem_eof_return(rtp->rtcp->read_bio, -1);
++	if (!(rtp->rtcp->write_bio = BIO_new(BIO_s_mem()))) {
++		ast_log(LOG_ERROR, "Failed to allocate memory for outbound SSL traffic on RTCP instance '%p'\n",
++			instance);
++		goto error;
++	}
++	BIO_set_mem_eof_return(rtp->rtcp->write_bio, -1);
++
++	SSL_set_bio(rtp->rtcp->ssl, rtp->rtcp->read_bio, rtp->rtcp->write_bio);
++	if (rtp->rtcp->dtls_setup == AST_RTP_DTLS_SETUP_PASSIVE) {
++		SSL_set_accept_state(rtp->rtcp->ssl);
++	} else {
++		SSL_set_connect_state(rtp->rtcp->ssl);
++	}
++	rtp->rtcp->connection = AST_RTP_DTLS_CONNECTION_NEW;
++
+ 	return 0;
+ 
+ error:
+@@ -943,13 +1090,28 @@ error:
+ 	SSL_CTX_free(rtp->ssl_ctx);
+ 	rtp->ssl_ctx = NULL;
+ 
++	/* SRTP_DTLS: do the same with RTCP */
++	if (rtp->rtcp->read_bio) {
++		BIO_free(rtp->rtcp->read_bio);
++		rtp->rtcp->read_bio = NULL;
++	}
++	if (rtp->rtcp->write_bio) {
++		BIO_free(rtp->rtcp->write_bio);
++		rtp->rtcp->write_bio = NULL;
++	}
++	if (rtp->rtcp->ssl) {
++		SSL_free(rtp->rtcp->ssl);
++		rtp->rtcp->ssl = NULL;
++	}
++	SSL_CTX_free(rtp->rtcp->ssl_ctx);
++	rtp->rtcp->ssl_ctx = NULL;
++
+ 	return -1;
+ }
+ 
+ static int ast_rtp_dtls_active(struct ast_rtp_instance *instance)
+ {
+ 	struct ast_rtp *rtp = ast_rtp_instance_get_data(instance);
+-
+ 	return !rtp->ssl_ctx ? 0 : 1;
+ }
+ 
+@@ -957,6 +1119,8 @@ static void ast_rtp_dtls_stop(struct ast_rtp_instance *instance)
+ {
+ 	struct ast_rtp *rtp = ast_rtp_instance_get_data(instance);
+ 
++	ast_verbose(VERBOSE_PREFIX_3 "Stopping DTLS...\n");
++
+ 	if (rtp->ssl_ctx) {
+ 		SSL_CTX_free(rtp->ssl_ctx);
+ 		rtp->ssl_ctx = NULL;
+@@ -966,6 +1130,18 @@ static void ast_rtp_dtls_stop(struct ast_rtp_instance *instance)
+ 		SSL_free(rtp->ssl);
+ 		rtp->ssl = NULL;
+ 	}
++
++
++	/* SRTP_DTLS: do the same with RTCP */
++	if (rtp->rtcp->ssl_ctx) {
++		SSL_CTX_free(rtp->rtcp->ssl_ctx);
++		rtp->rtcp->ssl_ctx = NULL;
++	}
++	if (rtp->rtcp->ssl) {
++		SSL_free(rtp->rtcp->ssl);
++		rtp->rtcp->ssl = NULL;
++	}
++
+ }
+ 
+ static void ast_rtp_dtls_reset(struct ast_rtp_instance *instance)
+@@ -979,6 +1155,13 @@ static void ast_rtp_dtls_reset(struct ast_rtp_instance *instance)
+ 
+ 	SSL_shutdown(rtp->ssl);
+ 	rtp->connection = AST_RTP_DTLS_CONNECTION_NEW;
++
++	/* SRTP_DTLS: do the same with RTCP */
++	if (!SSL_is_init_finished(rtp->rtcp->ssl)) {
++		return;
++	}
++	SSL_shutdown(rtp->rtcp->ssl);
++	rtp->rtcp->connection = AST_RTP_DTLS_CONNECTION_NEW;
+ }
+ 
+ static enum ast_rtp_dtls_connection ast_rtp_dtls_get_connection(struct ast_rtp_instance *instance)
+@@ -1038,6 +1221,16 @@ static void ast_rtp_dtls_set_setup(struct ast_rtp_instance *instance, enum ast_r
+ 	} else {
+ 		return;
+ 	}
++
++	/* SRTP_DTLS: do the same with RTCP */
++	rtp->rtcp->dtls_setup = rtp->dtls_setup;
++	if (rtp->rtcp->dtls_setup == AST_RTP_DTLS_SETUP_ACTIVE) {
++		SSL_set_connect_state(rtp->rtcp->ssl);
++	} else if (rtp->rtcp->dtls_setup == AST_RTP_DTLS_SETUP_PASSIVE) {
++		SSL_set_accept_state(rtp->rtcp->ssl);
++	} else {
++		return;
++	}
+ }
+ 
+ static void ast_rtp_dtls_set_fingerprint(struct ast_rtp_instance *instance, enum ast_rtp_dtls_hash hash, const char *fingerprint)
+@@ -1046,24 +1239,106 @@ static void ast_rtp_dtls_set_fingerprint(struct ast_rtp_instance *instance, enum
+ 	int pos = 0;
+ 	struct ast_rtp *rtp = ast_rtp_instance_get_data(instance);
+ 
+-	if (hash != AST_RTP_DTLS_HASH_SHA1) {
++	if (hash == AST_RTP_DTLS_HASH_SHA1) {
++		rtp->remote_fingerprint_type = AST_RTP_DTLS_HASH_SHA1;
++	} else if(hash == AST_RTP_DTLS_HASH_SHA256) {
++		rtp->remote_fingerprint_type = AST_RTP_DTLS_HASH_SHA256;
++	} else {
+ 		return;
+ 	}
+ 
+ 	while ((value = strsep(&tmp, ":")) && (pos != (EVP_MAX_MD_SIZE - 1))) {
+ 		sscanf(value, "%02x", (unsigned int*)&rtp->remote_fingerprint[pos++]);
+ 	}
++
++	/* SRTP_DTLS: do the same with RTCP */
++	memcpy(rtp->rtcp->remote_fingerprint, rtp->remote_fingerprint, sizeof(rtp->remote_fingerprint));
+ }
+ 
+-static const char *ast_rtp_dtls_get_fingerprint(struct ast_rtp_instance *instance, enum ast_rtp_dtls_hash hash)
++static const char *ast_rtp_dtls_get_fingerprint(struct ast_rtp_instance *instance, const struct ast_rtp_dtls_cfg *dtls_cfg, enum ast_rtp_dtls_hash fingerprint_type)
+ {
+ 	struct ast_rtp *rtp = ast_rtp_instance_get_data(instance);
+ 
+-	if (hash != AST_RTP_DTLS_HASH_SHA1) {
++	ast_debug(2, "SRTP_DTLS--Inside ast_rtp_dtls_get_fingerprint\n");
++
++	if  (rtp->remote_fingerprint_type == AST_RTP_DTLS_HASH_NONE) {
++	// no remote fingerprint yet, it means we are ones starting communication
++		if (dtlsdebug) {
++			ast_verbose(VERBOSE_PREFIX_3 "Returning local fingerprint of type %d: %s\n", fingerprint_type, rtp->local_fingerprint);
++		}
++		return rtp->local_fingerprint;
++	}
++
++	if (rtp->remote_fingerprint_type != fingerprint_type)
++	{
+ 		return NULL;
+ 	}
++	if (rtp->local_fingerprint_type == rtp->remote_fingerprint_type)
++	{
++		return rtp->local_fingerprint;
++	}
++	else
++	{
++		/* Remote fingerprint type is different from local fingerprint type
++		   recaclulate the local fingerprint */
++		if (dtls_cfg != NULL && dtls_cfg->certfile != NULL)
++		{
++			BIO *certbio;
++			unsigned char fingerprint[EVP_MAX_MD_SIZE];
++			char *local_fingerprint = rtp->local_fingerprint;
++			unsigned int size = 0;
++			unsigned int i = 0;
++			X509 *cert;
++			unsigned int failed = 0;
++			if (!(certbio = BIO_new(BIO_s_file()))) {
++				ast_log(LOG_ERROR, "Failed to allocate memory for certificate fingerprinting on RTP instance '%p'\n",
++				instance);
++				return NULL;
++			}
+ 
+-	return rtp->local_fingerprint;
++			if (rtp->remote_fingerprint_type == AST_RTP_DTLS_HASH_SHA256)
++			{
++				if (!BIO_read_filename(certbio, dtls_cfg->certfile) ||
++		                  !(cert = PEM_read_bio_X509(certbio, NULL, 0, NULL)) ||
++		                  !X509_digest(cert, EVP_sha256(), fingerprint, &size) ||
++		                  !size) {
++					failed = 1;
++					ast_log(LOG_ERROR, "Could not produce fingerprint from certificate '%s' for RTP instance '%p'\n",
++					        dtls_cfg->certfile, instance);
++				}
++			}
++			else if (rtp->remote_fingerprint_type == AST_RTP_DTLS_HASH_SHA1)
++			{
++				if (!BIO_read_filename(certbio, dtls_cfg->certfile) ||
++		                  !(cert = PEM_read_bio_X509(certbio, NULL, 0, NULL)) ||
++		                  !X509_digest(cert, EVP_sha1(), fingerprint, &size) ||
++		                  !size) {
++					failed = 1;
++					ast_log(LOG_ERROR, "Could not produce fingerprint from certificate '%s' for RTP instance '%p'\n",
++					        dtls_cfg->certfile, instance);
++				}
++			}
++			BIO_free_all(certbio);
++			if (!failed)
++			{
++				for (i = 0; i < size; i++) {
++					sprintf(local_fingerprint, "%.2X:", fingerprint[i]);
++					local_fingerprint += 3;
++				}
++				*(local_fingerprint-1) = 0;
++				rtp->local_fingerprint_type = rtp->remote_fingerprint_type;
++				return rtp->local_fingerprint;
++			}
++			else
++			{
++			    return NULL;
++			}
++		}
++		else
++		{
++			return NULL;
++		}
++	}
+ }
+ 
+ /* DTLS RTP Engine interface declaration */
+@@ -1120,18 +1395,11 @@ static struct ast_rtp_engine asterisk_rtp_engine = {
+ static void rtp_learning_seq_init(struct rtp_learning_info *info, uint16_t seq);
+ 
+ #ifdef USE_PJPROJECT
+-static void ast_rtp_on_ice_complete(pj_ice_sess *ice, pj_status_t status)
+-{
+-	struct ast_rtp *rtp = ice->user_data;
+-
+-	if (!strictrtp) {
+-		return;
+-	}
+-
+-	rtp->strict_rtp_state = STRICT_RTP_LEARN;
+-	rtp_learning_seq_init(&rtp->rtp_source_learn, (uint16_t)rtp->seqno);
+-}
+-
++/* SRTP_DTLS: callback to known when ICE is complete */
++#ifdef HAVE_OPENSSL_SRTP
++static void dtls_srtp_check_pending(struct ast_rtp_instance *instance, struct ast_rtp *rtp);
++#endif
++/*SRTP_DTLS */
+ static void ast_rtp_on_ice_rx_data(pj_ice_sess *ice, unsigned comp_id, unsigned transport_id, void *pkt, pj_size_t size, const pj_sockaddr_t *src_addr, unsigned src_addr_len)
+ {
+ 	struct ast_rtp *rtp = ice->user_data;
+@@ -1149,12 +1417,31 @@ static pj_status_t ast_rtp_on_ice_tx_pkt(pj_ice_sess *ice, unsigned comp_id, uns
+ 
+ 	if (transport_id == TRANSPORT_SOCKET_RTP) {
+ 		/* Traffic is destined to go right out the RTP socket we already have */
++		/* SRTP_DTLS : are we sending DTLS? */
++		if (dtlsdebug > 1)
++			ast_verbose(VERBOSE_PREFIX_3 "[RTP] ast_rtp_on_ice_tx_pkt (%zu)\n", size);
++
++		const char *out = pkt;
++		if ((*out >= 20) && (*out <= 64)) {
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTP] Sending DTLS data (%zu)\n", size);
++		}
+ 		status = pj_sock_sendto(rtp->s, pkt, &_size, 0, dst_addr, dst_addr_len);
+ 		/* sendto on a connectionless socket should send all the data, or none at all */
+ 		ast_assert(_size == size || status != PJ_SUCCESS);
+ 	} else if (transport_id == TRANSPORT_SOCKET_RTCP) {
+ 		/* Traffic is destined to go right out the RTCP socket we already have */
+ 		if (rtp->rtcp) {
++			/* SRTP_DTLS: are we sending DTLS? */
++			if (dtlsdebug > 1)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTCP] ast_rtp_on_ice_tx_pkt (%zu)\n", size);
++
++			const char *out = pkt;
++			if ((*out >= 20) && (*out <= 64)) {
++				if (dtlsdebug)
++					ast_verbose(VERBOSE_PREFIX_3 "[RTCP] Sending DTLS data (%zu)\n", size);
++			}
++
+ 			status = pj_sock_sendto(rtp->rtcp->s, pkt, &_size, 0, dst_addr, dst_addr_len);
+ 			/* sendto on a connectionless socket should send all the data, or none at all */
+ 			ast_assert(_size == size || status != PJ_SUCCESS);
+@@ -1176,6 +1463,44 @@ static pj_status_t ast_rtp_on_ice_tx_pkt(pj_ice_sess *ice, unsigned comp_id, uns
+ 	return status;
+ }
+ 
++static void ast_rtp_on_ice_complete(pj_ice_sess *ice, pj_status_t status) {
++	struct ast_rtp *rtp = ice->user_data;
++	ast_verbose(VERBOSE_PREFIX_3 "ICE is now complete\n");
++	rtp->icecomplete = 1;
++	/* SRTP_DTLS: do the same with RTCP (FIXME is this true??) */
++	rtp->rtcp->icecomplete = 1;
++	/* SRTP_DTLS: since ICE has been completed, we can do the DTLS handshake */
++	if(rtp->icecomplete) {
++		if (dtlsdebug)
++			ast_verbose(VERBOSE_PREFIX_3 "[RTP] ICE has been completed, yay!\n");
++
++		rtp->icecomplete = 0;
++		rtp->icedone = 1;
++		if (rtp->ssl) {
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTP]    >> Doing DTLS handshake as well...\n");
++
++			SSL_do_handshake(rtp->ssl);
++			dtls_srtp_check_pending(rtp->instance, rtp);
++		}
++	}
++	/* SRTP_DTLS: do the same with RTCP */
++	if(rtp->rtcp->icecomplete) {
++		if (dtlsdebug)
++			ast_verbose(VERBOSE_PREFIX_3 "[RTCP] ICE has been completed, yay!\n");
++
++		rtp->rtcp->icecomplete = 0;
++		rtp->rtcp->icedone = 1;
++		if (rtp->rtcp->ssl) {
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTCP]   >> Doing DTLS handshake as well...\n");
++
++			SSL_do_handshake(rtp->rtcp->ssl);
++			dtls_srtp_check_pending(rtp->instance, rtp);
++		}
++	}
++}
++
+ /* ICE Session interface declaration */
+ static pj_ice_sess_cb ast_rtp_ice_sess_cb = {
+ 	.on_ice_complete = ast_rtp_on_ice_complete,
+@@ -1334,8 +1659,7 @@ static int dtls_srtp_handle_timeout(const void *data)
+ 	}
+ 
+ 	ast_mutex_lock(&rtp->dtls_timer_lock);
+-	if (rtp->dtlstimerid == -1)
+-	{
++	if (rtp->dtlstimerid == -1) {
+ 		ast_mutex_unlock(&rtp->dtls_timer_lock);
+ 		ao2_ref(instance, -1);
+ 		return 0;
+@@ -1348,6 +1672,11 @@ static int dtls_srtp_handle_timeout(const void *data)
+ 		DTLSv1_handle_timeout(rtp->ssl);
+ 	}
+ 
++	/*SRTP_DTLS: do the same with rtcp */
++	if (rtp->rtcp && rtp->rtcp->ssl) {
++		DTLSv1_handle_timeout(rtp->rtcp->ssl);
++	}
++
+ 	dtls_srtp_check_pending(instance, rtp);
+ 
+ 	ao2_ref(instance, -1);
+@@ -1355,6 +1684,13 @@ static int dtls_srtp_handle_timeout(const void *data)
+ 	return 0;
+ }
+ 
++/* SRTP_DTLS: DTLS certificate verification callback */
++static int dtls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx) {
++	/* We just use the verify_callback to request a certificate from the client */
++	return 1;
++}
++/*SRTP_DTLS */
++
+ static void dtls_srtp_check_pending(struct ast_rtp_instance *instance, struct ast_rtp *rtp)
+ {
+ 	size_t pending = BIO_ctrl_pending(rtp->write_bio);
+@@ -1392,8 +1728,31 @@ static void dtls_srtp_check_pending(struct ast_rtp_instance *instance, struct as
+ 		}
+ 		ast_mutex_unlock(&rtp->dtls_timer_lock);
+ 
++		if (dtlsdebug)
++			ast_verbose(VERBOSE_PREFIX_3 "[RTP]   >> Going to send DTLS data: %zu bytes\n", pending);
++
+ 		__rtp_sendto(instance, outgoing, out, 0, &remote_address, 0, &ice, 0);
+ 	}
++
++	/* SRTP_DTLS: do the same with RTCP */
++	pending = BIO_ctrl_pending(rtp->rtcp->write_bio);
++	if (pending > 0) {
++		char outgoing[pending];
++		size_t out;
++		struct ast_sockaddr remote_address = { {0, } };
++		int ice;
++		//~ ast_rtp_instance_get_remote_address(instance, &remote_address);
++		if (ast_sockaddr_isnull(&rtp->rtcp->them)) {
++			return;
++		}
++		ast_sockaddr_copy(&remote_address, &rtp->rtcp->them);
++		if (ast_sockaddr_isnull(&remote_address)) {
++			return;
++		}
++		out = BIO_read(rtp->rtcp->write_bio, outgoing, sizeof(outgoing));
++		__rtp_sendto(instance, outgoing, out, 0, &remote_address, 1, &ice, 0);
++	}
++	/* SRTP_DTLS: */
+ }
+ 
+ static int dtls_srtp_renegotiate(const void *data)
+@@ -1403,6 +1762,9 @@ static int dtls_srtp_renegotiate(const void *data)
+ 
+ 	SSL_renegotiate(rtp->ssl);
+ 	SSL_do_handshake(rtp->ssl);
++	/* SRTP_DTLS: do the same with RTCP */
++	SSL_do_handshake(rtp->rtcp->ssl);
++	/*SRTP_DTLS */
+ 	dtls_srtp_check_pending(instance, rtp);
+ 
+ 	rtp->rekeyid = -1;
+@@ -1432,26 +1794,34 @@ static int dtls_srtp_setup(struct ast_rtp *rtp, struct ast_srtp *srtp, struct as
+ 			unsigned char fingerprint[EVP_MAX_MD_SIZE];
+ 			unsigned int size;
+ 
+-			if (!X509_digest(certificate, EVP_sha1(), fingerprint, &size) ||
+-			    !size ||
+-			    memcmp(fingerprint, rtp->remote_fingerprint, size)) {
+-				X509_free(certificate);
+-				ast_log(LOG_WARNING, "Fingerprint provided by remote party does not match that of peer certificate on RTP instance '%p'\n",
++			if (rtp->remote_fingerprint_type == AST_RTP_DTLS_HASH_SHA1)
++			{
++				if (!X509_digest(certificate, EVP_sha1(), fingerprint, &size) ||
++					!size ||
++					memcmp(fingerprint, rtp->remote_fingerprint, size)) {
++					X509_free(certificate);
++					ast_log(LOG_WARNING, "Fingerprint provided by remote party does not match that of peer certificate on RTP instance '%p'\n",
+ 					instance);
+-				return -1;
++					return -1;
++				}
++			}
++			else if (rtp->remote_fingerprint_type == AST_RTP_DTLS_HASH_SHA256 )
++			{
++				if (!X509_digest(certificate, EVP_sha256(), fingerprint, &size) ||
++					!size ||
++					memcmp(fingerprint, rtp->remote_fingerprint, size)) {
++					X509_free(certificate);
++					ast_log(LOG_WARNING, "Fingerprint provided by remote party does not match that of peer certificate on RTP instance '%p'\n",
++					instance);
++				   return -1;
++
++				}
+ 			}
+ 		}
+ 
+ 		X509_free(certificate);
+ 	}
+ 
+-	/* Ensure that certificate verification was successful */
+-	if (SSL_get_verify_result(rtp->ssl) != X509_V_OK) {
+-		ast_log(LOG_WARNING, "Peer certificate on RTP instance '%p' failed verification test\n",
+-			instance);
+-		return -1;
+-	}
+-
+ 	/* Produce key information and set up SRTP */
+ 	if (!SSL_export_keying_material(rtp->ssl, material, SRTP_MASTER_LEN * 2, "EXTRACTOR-dtls_srtp", 19, NULL, 0, 0)) {
+ 		ast_log(LOG_WARNING, "Unable to extract SRTP keying material from DTLS-SRTP negotiation on RTP instance '%p'\n",
+@@ -1520,6 +1890,10 @@ static int dtls_srtp_setup(struct ast_rtp *rtp, struct ast_srtp *srtp, struct as
+ 			goto error;
+ 		}
+ 	}
++	/* SRTP_DTLS: done with DTLS-SRTP */
++	ast_verbose(VERBOSE_PREFIX_3 "Looks like SRTP setup was completed...\n");
++	rtp->dtlsdone = 1;
++	/* SRTP_DTLS */
+ 
+ 	return 0;
+ 
+@@ -1551,6 +1925,10 @@ static int __rtp_recvfrom(struct ast_rtp_instance *instance, void *buf, size_t s
+ 
+ 		/* If this is an SSL packet pass it to OpenSSL for processing */
+ 		if ((*in >= 20) && (*in <= 64)) {
++			/* SRTP_DTLS */
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTP] Received a DTLS message\n");
++			/* SRTP_DTLS */
+ 			int res = 0;
+ 
+ 			/* If no SSL session actually exists terminate things */
+@@ -1568,10 +1946,23 @@ static int __rtp_recvfrom(struct ast_rtp_instance *instance, void *buf, size_t s
+ 
+ 			dtls_srtp_check_pending(instance, rtp);
+ 
+-			BIO_write(rtp->read_bio, buf, len);
++			/* SRTP_DTLS */
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTP]   >> >> writing %d bytes on read_BIO (to have it read later)\n", len);
++
++			int written = BIO_write(rtp->read_bio, buf, len);
++
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTP]   >> >> >> actually wrote %d bytes (%s)\n", written, BIO_should_retry(rtp->read_bio) ? "should retry" : "should NOT retry");
++			/* SRTP_DTLS */
+ 
+ 			len = SSL_read(rtp->ssl, buf, len);
+ 
++			/* SRTP_DTLS */
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTP]  >> >> read %d bytes from SSL\n", len);
++			/* SRTP_DTLS */
++
+ 			dtls_srtp_check_pending(instance, rtp);
+ 
+ 			if (rtp->dtls_failure) {
+@@ -1582,6 +1973,7 @@ static int __rtp_recvfrom(struct ast_rtp_instance *instance, void *buf, size_t s
+ 
+ 			if (SSL_is_init_finished(rtp->ssl)) {
+ 				/* Any further connections will be existing since this is now established */
++				ast_verbose(VERBOSE_PREFIX_3 "[RTP]   >> DTLS established, yay!\n");
+ 				rtp->connection = AST_RTP_DTLS_CONNECTION_EXISTING;
+ 
+ 				/* Use the keying material to set up key/salt information */
+@@ -1590,6 +1982,65 @@ static int __rtp_recvfrom(struct ast_rtp_instance *instance, void *buf, size_t s
+ 
+ 			return res;
+ 		}
++	} /* SRTP_DTLS -- since we don't do RTCP mux, we need DTLS for RTCP as well */
++	else
++	{
++		char *in = buf;
++
++		dtls_srtp_check_pending(instance, rtp);
++
++		/* If this is an SSL packet pass it to OpenSSL for processing */
++		if ((*in >= 20) && (*in <= 64)) {
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTCP] Received a DTLS message\n");
++			int res = 0;
++
++			/* If no SSL session actually exists terminate things */
++			if (!rtp->rtcp->ssl) {
++				ast_log(LOG_ERROR, "Received SSL traffic on RTP instance '%p' without an SSL session\n",
++					instance);
++				return -1;
++			}
++
++			/* If we don't yet know if we are active or passive and we receive a packet... we are obviously passive */
++			if (rtp->rtcp->dtls_setup == AST_RTP_DTLS_SETUP_ACTPASS) {
++				rtp->rtcp->dtls_setup = AST_RTP_DTLS_SETUP_PASSIVE;
++				SSL_set_accept_state(rtp->rtcp->ssl);
++			}
++
++			dtls_srtp_check_pending(instance, rtp);
++
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTCP]   >> >> writing %d bytes on read_BIO (to have it read later)\n", len);
++
++			int written = BIO_write(rtp->rtcp->read_bio, buf, len);
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTCP]   >> >> >> actually wrote %d bytes (%s)\n", written, BIO_should_retry(rtp->rtcp->read_bio) ? "should retry" : "should NOT retry");
++
++			len = SSL_read(rtp->rtcp->ssl, buf, len);
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTCP]  >> >> read %d bytes from SSL\n", len);
++
++			dtls_srtp_check_pending(instance, rtp);
++
++			if (rtp->rtcp->dtls_failure) {
++				ast_log(LOG_ERROR, "DTLS failure occurred on RTCP instance '%p', terminating\n",
++					instance);
++				return -1;
++			}
++
++			if (SSL_is_init_finished(rtp->rtcp->ssl)) {
++				ast_verbose(VERBOSE_PREFIX_3 "[RTCP]   >> DTLS established, yay!\n");
++				/* Any further connections will be existing since this is now established */
++				rtp->rtcp->connection = AST_RTP_DTLS_CONNECTION_EXISTING;
++
++				/* Use the keying material to set up key/salt information */
++				//~ res = dtls_srtp_setup(rtp, srtp, instance);
++				rtp->rtcp->dtlsdone = 1;
++			}
++
++			return res;
++		}
+ 	}
+ #endif
+ 
+@@ -1667,11 +2118,40 @@ static int __rtp_sendto(struct ast_rtp_instance *instance, void *buf, size_t siz
+ 
+ static int rtcp_sendto(struct ast_rtp_instance *instance, void *buf, size_t size, int flags, struct ast_sockaddr *sa, int *ice)
+ {
++	/* SRTP_DTLS: don't send RTCP until ICE completed (FIXME useless? pjnath already does this?) */
++	struct ast_rtp *rtp = ast_rtp_instance_get_data(instance);
++	if(rtp->rtcp->ssl && !rtp->rtcp->dtlsdone) {
++		const char *out = buf;
++		if ((*out >= 20) && (*out <= 64)) {
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTCP] Sending DTLS data (%zu)\n", size);
++		} else if(rtp->rtcp->connection == AST_RTP_DTLS_CONNECTION_NEW) {
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTCP]   >> Still waiting for the DTLS handshake to complete, discarding packet (%zu)\n", size);
++			return 0;
++		}
++	}
++	/* SRTP_DTLS */
+ 	return __rtp_sendto(instance, buf, size, flags, sa, 1, ice, 1);
+ }
+ 
+ static int rtp_sendto(struct ast_rtp_instance *instance, void *buf, size_t size, int flags, struct ast_sockaddr *sa, int *ice)
+ {
++	/*SRTP_DTLS */
++	struct ast_rtp *rtp = ast_rtp_instance_get_data(instance);
++	/* don't send RTP until DTLS handshake has been completed */
++	if(rtp->ssl && !rtp->dtlsdone) {
++		const char *out = buf;
++		if ((*out >= 20) && (*out <= 64)) {
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTP] Sending DTLS data (%zu)\n", size);
++		} else if(rtp->connection == AST_RTP_DTLS_CONNECTION_NEW) {
++			if (dtlsdebug)
++				ast_verbose(VERBOSE_PREFIX_3 "[RTP]   >> Still waiting for the DTLS handshake to complete, discarding packet (%zu)\n", size);
++			return 0;
++		}
++	}
++	/*SRTP_DTLS */
+ 	return __rtp_sendto(instance, buf, size, flags, sa, 0, ice, 1);
+ }
+ 
+@@ -1915,7 +2395,7 @@ static int ice_create(struct ast_rtp_instance *instance, struct ast_sockaddr *ad
+ 	passwd = pj_str(rtp->local_passwd);
+ 
+ 	/* Create an ICE session for ICE negotiation */
+-	if (pj_ice_sess_create(&stun_config, NULL, PJ_ICE_SESS_ROLE_UNKNOWN, 2,
++	if (pj_ice_sess_create(&stun_config, NULL, PJ_ICE_SESS_ROLE_CONTROLLING, 2,
+ 			&ast_rtp_ice_sess_cb, &ufrag, &passwd, &rtp->ice) == PJ_SUCCESS) {
+ 		/* Make this available for the callbacks */
+ 		rtp->ice->user_data = rtp;
+@@ -2028,7 +2508,13 @@ static int ast_rtp_new(struct ast_rtp_instance *instance,
+ #ifdef HAVE_OPENSSL_SRTP
+ 	rtp->rekeyid = -1;
+ 	rtp->dtlstimerid = -1;
++	rtp->local_fingerprint_type = AST_RTP_DTLS_HASH_NONE;
++	rtp->remote_fingerprint_type = AST_RTP_DTLS_HASH_NONE;
++
+ #endif
++	/* SRTP_DTLS: make rtp aware of instance as well... */
++	rtp->instance = instance;
++	/*SRTP_DTLS */
+ 
+ 	return 0;
+ }
+@@ -2658,7 +3144,7 @@ static int ast_rtcp_write(const void *data)
+ 	}
+ 
+ 	if (!res) {
+-		/* 
++		/*
+ 		 * Not being rescheduled.
+ 		 */
+ 		ao2_ref(instance, -1);
+@@ -4404,14 +4890,14 @@ static int ast_rtp_sendcng(struct ast_rtp_instance *instance, int level)
+ 	payload = ast_rtp_codecs_payload_code(ast_rtp_instance_get_codecs(instance), 0, NULL, AST_RTP_CN);
+ 
+ 	level = 127 - (level & 0x7f);
+-	
++
+ 	rtp->dtmfmute = ast_tvadd(ast_tvnow(), ast_tv(0, 500000));
+ 
+ 	/* Get a pointer to the header */
+ 	rtpheader = (unsigned int *)data;
+ 	rtpheader[0] = htonl((2 << 30) | (payload << 16) | (rtp->seqno));
+ 	rtpheader[1] = htonl(rtp->lastts);
+-	rtpheader[2] = htonl(rtp->ssrc); 
++	rtpheader[2] = htonl(rtp->ssrc);
+ 	data[12] = level;
+ 
+ 	res = rtp_sendto(instance, (void *) rtpheader, hdrlen + 1, 0, &remote_address, &ice);
+@@ -4446,9 +4932,15 @@ static int ast_rtp_activate(struct ast_rtp_instance *instance)
+ 		return 0;
+ 	}
+ 
+-	SSL_do_handshake(rtp->ssl);
+-
+-	dtls_srtp_check_pending(instance, rtp);
++	/* SRTP_DTLS: only do the DTLS handshake right now if there's no ICE or if it has completed */
++	if(!rtp->ice || rtp->icedone) {
++		ast_verbose(VERBOSE_PREFIX_3 "  >> Doing DTLS handshake as well...\n");
++		SSL_do_handshake(rtp->ssl);
++		/* Meetecho: do the same with RTCP */
++		SSL_do_handshake(rtp->rtcp->ssl);
++		ast_verbose(VERBOSE_PREFIX_3 "  >> [activate] check pending...\n");
++		dtls_srtp_check_pending(instance, rtp);
++	}
+ 
+ 	return 0;
+ }
+@@ -4581,10 +5073,49 @@ static char *handle_cli_rtcp_set_stats(struct ast_cli_entry *e, int cmd, struct
+ 	return CLI_SUCCESS;
+ }
+ 
++/* SRTP_DTLS: add DTLS debugging */
++static char *handle_cli_dtls_set_debug(struct ast_cli_entry *e, int cmd, struct ast_cli_args *a)
++{
++	switch (cmd) {
++	case CLI_INIT:
++		e->command = "dtls set debug";
++		e->usage =
++			"Usage: dtls set debug {status|none|normal|huge}\n"
++			"       Enable/Disable DTLS debugging: normal only debugs setup and errors, huge debugs every single packet\n";
++		return NULL;
++	case CLI_GENERATE:
++		return NULL;
++	}
++
++	if (a->argc != 4)
++		return CLI_SHOWUSAGE;
++
++	if (!strncasecmp(a->argv[a->argc-1], "status", 6)) {
++		ast_cli(a->fd, "DTLS debugging %s\n", dtlsdebug > 1 ? "huge" : dtlsdebug > 0 ? "normal" : "none");
++		return CLI_SUCCESS;
++	}
++	if (!strncasecmp(a->argv[a->argc-1], "huge", 4))
++		dtlsdebug = 2;
++	else if (!strncasecmp(a->argv[a->argc-1], "normal", 6))
++		dtlsdebug = 1;
++	else if (!strncasecmp(a->argv[a->argc-1], "none", 4))
++		dtlsdebug = 0;
++	else
++		return CLI_SHOWUSAGE;
++
++	ast_cli(a->fd, "DTLS debugging %s\n", dtlsdebug > 1 ? "huge" : dtlsdebug > 0 ? "normal" : "none");
++	return CLI_SUCCESS;
++}
++/*SRTP_DTLS */
++
++
+ static struct ast_cli_entry cli_rtp[] = {
+ 	AST_CLI_DEFINE(handle_cli_rtp_set_debug,  "Enable/Disable RTP debugging"),
+ 	AST_CLI_DEFINE(handle_cli_rtcp_set_debug, "Enable/Disable RTCP debugging"),
+ 	AST_CLI_DEFINE(handle_cli_rtcp_set_stats, "Enable/Disable RTCP stats"),
++	/* SRTP_DTLS: add DTLS debugging */
++	AST_CLI_DEFINE(handle_cli_dtls_set_debug, "Enable/Disable DTLS debugging"),
++	/*SRTP_DTLS */
+ };
+ 
+ static int rtp_reload(int reload)
+-- 
+2.0.0
+
