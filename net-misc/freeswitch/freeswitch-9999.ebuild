@@ -791,7 +791,7 @@ src_unpack() {
 	epatch "${FILESDIR}"/mod_hash_1.4.x.patch
 	
 	# disable -Werror
-        epatch "${FILESDIR}/${P}-no-werror.patch"
+#        epatch "${FILESDIR}/${P}-no-werror.patch"
 
         # patch for https://freeswitch.org/jira/browse/FS-7032
 #        epatch "${FILESDIR}/switch_core_media_bug.patch"
