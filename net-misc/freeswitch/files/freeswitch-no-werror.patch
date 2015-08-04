@@ -1,0 +1,50 @@
+diff -Nur freeswitch-1.4.13.orig/configure.ac freeswitch-1.4.13/configure.ac
+--- freeswitch-1.4.13.orig/configure.ac 2014-12-12 01:25:27.348588013 +0800
++++ freeswitch-1.4.13/configure.ac      2014-12-12 04:56:49.416111701 +0800
+@@ -378,9 +378,6 @@
+ elif test "x${ax_cv_c_compiler_vendor}" = "xgnu" ; then
+     APR_ADDTO(SWITCH_AM_CFLAGS, -fPIC)
+     APR_ADDTO(SWITCH_AM_CXXFLAGS, -fPIC)
+-    if test "$ac_cv_gcc_supports_w_no_unused_result" = yes; then
+-      APR_ADDTO(SWITCH_AM_CFLAGS, -Werror)
+-    fi
+     if test "${enable_64}" = "yes"; then
+        case "$host" in
+              *darwin*)
+@@ -488,9 +485,6 @@
+        CFLAGS="$saved_CFLAGS"
+
+        if test "x${ax_cv_c_compiler_vendor}" = "xgnu" ; then
+-           if test "$ac_cv_gcc_supports_w_no_unused_result" = yes; then
+-             APR_ADDTO(SWITCH_AM_CFLAGS, -Wno-unused-result)
+-           fi
+            APR_ADDTO(SWITCH_AM_CFLAGS, -g -ggdb)
+            export DEBUG_CFLAGS="-g -ggdb"
+        fi
+diff -Nur freeswitch-1.4.13.orig/libs/freetdm/src/ftdm_backtrace.c freeswitch-1.4.13/libs/freetdm/src/ftdm_backtrace.c
+--- freeswitch-1.4.13.orig/libs/freetdm/src/ftdm_backtrace.c    2014-12-12 01:25:26.688588038 +0800
++++ freeswitch-1.4.13/libs/freetdm/src/ftdm_backtrace.c 2014-12-12 03:29:44.463307939 +0800
+@@ -2,6 +2,9 @@
+  *
+  *
+  */
++#ifndef _DEFAULT_SOURCE
++#define _DEFAULT_SOURCE
++#endif
+ #define _BSD_SOURCE
+ #include "private/ftdm_core.h"
+
+diff -Nur freeswitch-1.4.13.orig/src/include/switch.h freeswitch-1.4.13/src/include/switch.h
+--- freeswitch-1.4.13.orig/src/include/switch.h 2014-12-12 01:25:27.321588014 +0800
++++ freeswitch-1.4.13/src/include/switch.h      2014-12-12 04:21:24.024191526 +0800
+@@ -60,8 +60,8 @@
+ #endif
+ #endif
+ #ifdef __linux__
+-#ifndef _BSD_SOURCE
+-#define _BSD_SOURCE
++#ifndef _DEFAULT_SOURCE
++#define _DEFAULT_SOURCE
+ #endif
+ #endif
+ #ifndef __BSD_VISIBLE
