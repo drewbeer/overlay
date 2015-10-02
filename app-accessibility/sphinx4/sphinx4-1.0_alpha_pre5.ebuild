@@ -12,7 +12,8 @@ MY_PV=${MY_PV2}${MY_PV1}
 
 DESCRIPTION="A speech recognizer written entirely in the Java programming language"
 HOMEPAGE="http://cmusphinx.sourceforge.net/"
-SRC_URI="http://sourceforge.net/projects/cmusphinx/files/${PN}/${MY_PV}/${PN}-${MY_PV}-src.zip"
+#SRC_URI="http://sourceforge.net/projects/cmusphinx/files/${PN}/${MY_PV}/${PN}-${MY_PV}-src.zip"
+SRC_URI="http://mirrors.safesoft.us/gentoo/portage/app-accessibility/sphinx4/sphinx4-5prealpha-src.zip"
 
 LICENSE="GPL-2"
 KEYWORDS="~amd64"
