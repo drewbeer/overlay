@@ -1,6 +1,6 @@
 # Copyright 1999-2015 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
-# $Header: /var/cvsroot/gentoo-x86/net-misc/asterisk/asterisk-11.15.0-r1.ebuild,v 1.3 2015/02/10 10:07:53 ago Exp $
+# $Id$
 
 EAPI=5
 inherit autotools base eutils linux-info multilib user systemd
@@ -10,7 +10,7 @@ MY_P="${PN}-${PV/_/-}"
 DESCRIPTION="Asterisk: A Modular Open Source PBX System"
 HOMEPAGE="http://www.asterisk.org/"
 SRC_URI="http://downloads.asterisk.org/pub/telephony/asterisk/releases/${MY_P}.tar.gz
-	 http://mirrors.safesoft.us/gentoo/portage/net-misc/asterisk/asterisk-patchset-1.0/asterisk-patchset.tar.gz"
+         http://mirrors.safesoft.us/gentoo/portage/net-misc/asterisk/asterisk-patchset-2.0/asterisk-patchset.tar.gz"
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="amd64 x86"
@@ -20,9 +20,9 @@ IUSE_VOICEMAIL_STORAGE="
 	voicemail_storage_odbc
 	voicemail_storage_imap
 "
-IUSE="${IUSE_VOICEMAIL_STORAGE} alsa bluetooth calendar +caps cluster curl dahdi debug doc freetds gtalk http iconv ilbc jabber ldap libedit lua mysql newt +samples odbc osplookup oss portaudio postgres radius selinux snmp span speex srtp static syslog vorbis"
+IUSE="${IUSE_VOICEMAIL_STORAGE} alsa bluetooth calendar +caps cluster curl dahdi debug doc freetds gtalk http iconv ilbc xmpp ldap libedit lua mysql newt +samples odbc osplookup oss portaudio postgres radius selinux snmp span speex srtp static syslog vorbis"
 IUSE_EXPAND="VOICEMAIL_STORAGE"
-REQUIRED_USE="gtalk? ( jabber )
+REQUIRED_USE="gtalk? ( xmpp )
 	^^ ( ${IUSE_VOICEMAIL_STORAGE/+/} )
 	voicemail_storage_odbc? ( odbc )
 "
@@ -33,7 +33,7 @@ PATCHES=( "${WORKDIR}/asterisk-patchset" )
 CDEPEND="dev-db/sqlite:3
 	dev-libs/popt
 	dev-libs/libxml2
-	dev-libs/openssl
+	dev-libs/openssl:*
 	sys-libs/ncurses
 	sys-libs/zlib
 	alsa? ( media-libs/alsa-lib )
@@ -51,16 +51,16 @@ CDEPEND="dev-db/sqlite:3
 	http? ( dev-libs/gmime:2.6 )
 	iconv? ( virtual/libiconv )
 	ilbc? ( dev-libs/ilbc-rfc3951 )
-	jabber? ( dev-libs/iksemel )
+	xmpp? ( dev-libs/iksemel )
 	ldap? ( net-nds/openldap )
 	libedit? ( dev-libs/libedit )
-	lua? ( dev-lang/lua )
+	lua? ( dev-lang/lua:* )
 	mysql? ( virtual/mysql )
 	newt? ( dev-libs/newt )
 	odbc? ( dev-db/unixODBC )
 	osplookup? ( net-libs/osptoolkit )
 	portaudio? ( media-libs/portaudio )
-	postgres? ( dev-db/postgresql )
+	postgres? ( dev-db/postgresql:* )
 	radius? ( net-dialup/radiusclient-ng )
 	snmp? ( net-analyzer/net-snmp )
 	span? ( media-libs/spandsp )
@@ -175,7 +175,7 @@ src_configure() {
 	use_select gtalk		chan_motif
 	use_select http			res_http_post
 	use_select iconv		func_iconv
-	use_select jabber		res_xmpp
+	use_select xmpp			res_xmpp
 	use_select ilbc                 codec_ilbc format_ilbc
 	use_select ldap			res_config_ldap
 	use_select lua			pbx_lua
