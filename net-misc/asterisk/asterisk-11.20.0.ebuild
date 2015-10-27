@@ -10,7 +10,7 @@ MY_P="${PN}-${PV/_/-}"
 DESCRIPTION="Asterisk: A Modular Open Source PBX System"
 HOMEPAGE="http://www.asterisk.org/"
 SRC_URI="http://downloads.asterisk.org/pub/telephony/asterisk/releases/${MY_P}.tar.gz
-         http://mirrors.safesoft.us/gentoo/portage/net-misc/asterisk/asterisk-patchset-3.0/asterisk-patchset.tar.gz"
+         http://mirrors.safesoft.us/gentoo/portage/net-misc/asterisk/asterisk-patchset-3.0/asterisk-patchset-3.0.tar.gz"
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="amd64 x86"
