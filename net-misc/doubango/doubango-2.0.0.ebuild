@@ -15,7 +15,7 @@ LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="amd64 x86"
 
-CDEPEND="libsrtp? ( >=net-libs/libsrtp-1.5.2-r1 )"
+DEPEND=">=net-libs/libsrtp-1.5.2-r1"
 
 S="${WORKDIR}/doubango"
 
