@@ -38,16 +38,16 @@ src_configure() {
 
 src_compile() {
 	export LDFLAGS="-ldl -lpthread"
-	export PREFIX="/opt/webrtc2sip"
+	export PREFIX="/usr"
 
 	emake -ldl -lpthread \
-		PREFIX="/opt/webrtc2sip"
+		PREFIX="/usr"
 }
 
 src_install() {
 	export LDFLAGS="-ldl -lpthread"
 
-	mkdir -p "${D}/opt/webrtc2sip"
+	#mkdir -p "${D}/opt/webrtc2sip"
 
 	emake DESTDIR="${D}" installdirs
 	emake DESTDIR="${D}" install
