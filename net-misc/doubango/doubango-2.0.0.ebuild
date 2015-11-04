@@ -8,16 +8,16 @@ inherit autotools base eutils multilib user systemd
 
 MY_P="${PN}-${PV/_/-}"
 
-DESCRIPTION="Webrtc2sip: Smart SIP and Media Gateway to connect WebRTC endpoints"
-HOMEPAGE="http://www.webrtc2sip.org/"
-SRC_URI="http://mirrors.safesoft.us/gentoo/portage/net-misc/webrtc2sip/${MY_P}.tar.gz"
+DESCRIPTION="Doubango: Doubango Telecom Libraries"
+HOMEPAGE="http://www.doubango.org/"
+SRC_URI="http://mirrors.safesoft.us/gentoo/portage/net-misc/doubango/${MY_P}.tar.gz"
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="amd64 x86"
 
 CDEPEND="libsrtp? ( >=net-libs/libsrtp-1.5.2-r1 )"
 
-S="${WORKDIR}/webrtc2sip"
+S="${WORKDIR}/doubango"
 
 src_prepare() {
         ./autogen.sh || die "Autogen script failed"
@@ -27,26 +27,22 @@ src_configure() {
 	local vmst
 
 	export PKG_CONFIG_PATH="${PKG_CONFIG_PATH}:/usr/local/lib/pkgconfig"
-	export LDFLAGS="-ldl -lpthread"
-	export CFLAGS="-lpthread"
+	export LDFLAGS="-ldl"
 
 	econf \
-		-prefix=/opt/webrtc2sip \
-		-with-doubango=/usr/local
+		-with-srtp=/usr/include/srtp/ \
+		-with-ssl=/usr/include/openssl
+
 }
 
 src_compile() {
-	export LDFLAGS="-ldl -lpthread"
-	export PREFIX="/opt/webrtc2sip"
+	export LDFLAGS="-ldl"
 
-	emake -ldl -lpthread \
-		PREFIX="/opt/webrtc2sip"
+	emake
 }
 
 src_install() {
-	export LDFLAGS="-ldl -lpthread"
-
-	mkdir -p "${D}/opt/webrtc2sip"
+	export LDFLAGS="-ldl"
 
 	emake DESTDIR="${D}" installdirs
 	emake DESTDIR="${D}" install
