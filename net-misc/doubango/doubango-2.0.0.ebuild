@@ -20,6 +20,10 @@ CDEPEND="libsrtp? ( >=net-libs/libsrtp-1.5.2-r1 )"
 S="${WORKDIR}/doubango"
 
 src_prepare() {
+        sed -i Makefile.am \
+                -e 's/\<ldconfig\>//g' \
+                || die "sed Makefile.am"
+
         ./autogen.sh || die "Autogen script failed"
 }
 
@@ -44,8 +48,17 @@ src_compile() {
 src_install() {
 	export LDFLAGS="-ldl"
 
-	emake DESTDIR="${D}" installdirs
-	emake DESTDIR="${D}" install
+	emake DESTDIR="${D}" installdirs || die "failed" 
+	emake DESTDIR="${D}" install || die "failed" 
 
 }
+
+
+
+pkg_postinst() {
+        is_crosscompile && return 0
+
+        ldconfig
+}
+
 
