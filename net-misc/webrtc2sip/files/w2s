@@ -1,0 +1,169 @@
+#!/usr/bin/php
+<?php
+
+$state = "";
+$instance = false;
+
+if(isset($argv[1]))$state = strtolower($argv[1]);
+if(isset($argv[2]))$instance = $argv[2];
+
+process($state,$instance);
+
+function start($instance) {
+
+        $ports = get_ports($instance);
+        $wss = $ports['wss'];
+        $monitor = $ports['monitor'];
+
+	$check_webrtc_running = trim(`netstat -npa | grep ':$wss' | awk '{print \$7}'`);
+	
+	if(strlen($check_webrtc_running) <= 0) {
+
+		$config = "/etc/webrtc2sip/instance_".$instance.".xml";
+
+		file_put_contents($config, gen_config($instance));
+
+		//print "/usr/bin/screen -dm -S webrtc2sip$instance bash -c 'ulimit -n 65535; /usr/sbin/webrtc2sip --config=$config >> /var/log/webrtc2sip$instance.log 2>&1; exec sh'\n";
+
+		`/usr/bin/screen -dm -S webrtc2sip$instance bash -c 'ulimit -n 65535; /usr/sbin/webrtc2sip --config=$config >> /var/log/webrtc2sip$instance.log 2>&1; exec sh'`;
+
+	} else {
+		print "Instance $instance already Running!\n";
+	}
+
+
+	$check_monitor_running = trim(`netstat -npa | grep ':$monitor' | awk '{print \$7}'`);
+	
+	if(strlen($check_monitor_running) <= 0) {
+
+		`screen -dm -S webrtc2sipMonitor$instance bash -c 'cd /opt/webrtc2sip/www; php -S 0.0.0.0:$monitor'`;
+
+	} else {
+		print "Instance $instance monitor already Running!\n";
+	}
+
+
+}
+
+function stop($instance) {
+
+	$ports = get_ports($instance);
+	$wss = $ports['wss'];
+	$monitor = $ports['monitor'];
+
+        $check_running = trim(`netstat -npa | grep ':$wss' | awk '{print \$7}'`);
+	if(strlen($check_running) > 0) {
+		$pid_array = explode("/", $check_running);
+		$pid = $pid_array[0];
+		if(is_numeric($pid)) {
+			print "Process $pid stopped!\n";
+			posix_kill($pid, 9);
+		} else {
+			print "pid not found!\n";
+		}
+	}
+
+	$check_monitor_running = trim(`netstat -npa | grep ':$monitor' | awk '{print \$7}'`);
+	if(strlen($check_monitor_running) > 0) {
+		$pid_array = explode("/", $check_monitor_running);
+		$pid = $pid_array[0];
+		if(is_numeric($pid)) {
+			print "Monitor $pid stopped!\n";
+			posix_kill($pid, 9);
+		} else {
+			print "pid not found!\n";
+		}
+	}
+
+
+}
+
+
+function process($state, $instance) {
+ 
+	if($state == "start") {
+
+		if(!$instance) {
+	
+			for ($x = 1; $x <= 10; $x++) {
+				start($x);
+			}
+
+		} else if($instance) {
+			start($instance);
+		}
+
+	} else if($state == "stop") {
+
+		if(!$instance) {
+	
+			for ($x = 1; $x <= 10; $x++) {
+				stop($x);
+			}
+	
+		} else if($instance) {
+			stop($instance);
+		}
+
+	}
+
+}
+
+function get_ports($instance) {
+
+	$udp = "10000" + ($instance * 10);
+	$wss = $udp+1;
+	$monitor = $wss + 10000;
+
+	return array('udp' => $udp, 'wss' => $wss, 'monitor' => $monitor);
+}
+
+function gen_config($instance) {
+
+	$ports = get_ports($instance);
+
+	$udp = $ports['udp'];
+	$wss = $ports['wss'];
+
+return "<?xml version=\"1.0\" encoding=\"utf-8\" ?>
+<!-- Please check the technical guide (http://webrtc2sip.org/technical-guide-1.0.pdf) for more information on how to adjust this file -->
+<config>
+
+<debug-level>ERROR</debug-level>
+
+<transport>udp;*;$udp</transport>
+<transport>wss;*;$wss</transport>
+
+<enable-rtp-symetric>yes</enable-rtp-symetric>
+<enable-100rel>no</enable-100rel>
+<enable-media-coder>yes</enable-media-coder>
+<enable-videojb>yes</enable-videojb>
+<video-size-pref>vga</video-size-pref>
+<rtp-buffsize>65535</rtp-buffsize>
+<avpf-tail-length>100;400</avpf-tail-length>
+<srtp-mode>optional</srtp-mode>
+<srtp-type>dtls</srtp-type>
+<dtmf-type>rfc4733</dtmf-type>
+
+<codecs>pcmu</codecs>
+
+<stun-server>stun.l.google.com;19302</stun-server>
+<enable-icestun>yes</enable-icestun>
+
+<max-fds>-1</max-fds>
+
+<nameserver>8.8.8.8</nameserver>
+
+<ssl-certificates>
+/etc/ssl/safesoft.io.key;
+/etc/ssl/safesoft.io.crt;
+*;
+no
+</ssl-certificates>
+
+</config>
+
+";
+
+}
+

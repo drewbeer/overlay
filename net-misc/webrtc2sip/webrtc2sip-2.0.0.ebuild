@@ -48,12 +48,11 @@ src_compile() {
 src_install() {
 	export LDFLAGS="-ldl -lpthread"
 
-        keepdir /etc/webrtc2sip
-        keepdir /etc/webrtc2sip/www
-        keepdir /etc/webrtc2sip/www/x
+        mkdir -p "${D}/etc/webrtc2sip"
+        mkdir -p "${D}/etc/webrtc2sip/www"
 
-	cp "${FILESDIR}"/webrtc2sip-x.xml /etc/webrtc2sip
-	cp "${FILESDIR}"/webrtc2sip-x.xml /etc/webrtc2sip/www/x
+	//cp "${FILESDIR}"/webrtc2sip-x.xml "${D}/etc/webrtc2sip"
+	cp "${FILESDIR}"/index.php "${D}/etc/webrtc2sip/www/"
 
 	emake DESTDIR="${D}" installdirs
 	emake DESTDIR="${D}" install
