@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Please check the technical guide (http://webrtc2sip.org/technical-guide-1.0.pdf) for more information on how to adjust this file -->
+<config>
+
+<debug-level>ERROR</debug-level>
+
+<transport>udp;x.x.x.x;10060</transport>
+<transport>wss;x.x.x.x;10062</transport>
+
+<enable-rtp-symetric>yes</enable-rtp-symetric>
+<enable-100rel>no</enable-100rel>
+<enable-media-coder>yes</enable-media-coder>
+<enable-videojb>yes</enable-videojb>
+<video-size-pref>vga</video-size-pref>
+<rtp-buffsize>65535</rtp-buffsize>
+<avpf-tail-length>100;400</avpf-tail-length>
+<srtp-mode>optional</srtp-mode>
+<srtp-type>dtls</srtp-type>
+<dtmf-type>rfc4733</dtmf-type>
+
+<codecs>pcmu</codecs>
+
+<stun-server>stun.l.google.com;19302;stun-user@doubango.org;stun-password</stun-server>
+<enable-icestun>yes</enable-icestun>
+
+<max-fds>-1</max-fds>
+
+<nameserver>8.8.8.8</nameserver>
+
+<ssl-certificates>
+/etc/ssl/safesoft.io.key;
+/etc/ssl/safesoft.io.crt;
+*;
+no
+</ssl-certificates>
+
+</config>

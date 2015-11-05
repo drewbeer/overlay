@@ -16,7 +16,8 @@ SLOT="0"
 KEYWORDS="amd64 x86"
 
 DEPEND=" >=net-libs/libsrtp-1.5.2-r1
-	 >=net-misc/doubango-2.0.0"
+	 >=net-misc/doubango-2.0.0
+	app-misc/screen"
 
 S="${WORKDIR}/webrtc2sip"
 
@@ -46,6 +47,13 @@ src_compile() {
 
 src_install() {
 	export LDFLAGS="-ldl -lpthread"
+
+        keepdir /etc/webrtc2sip
+        keepdir /etc/webrtc2sip/www
+        keepdir /etc/webrtc2sip/www/x
+
+	cp "${FILESDIR}"/webrtc2sip-x.xml /etc/webrtc2sip
+	cp "${FILESDIR}"/webrtc2sip-x.xml /etc/webrtc2sip/www/x
 
 	emake DESTDIR="${D}" installdirs
 	emake DESTDIR="${D}" install
