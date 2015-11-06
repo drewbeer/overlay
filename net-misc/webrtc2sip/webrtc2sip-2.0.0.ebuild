@@ -58,7 +58,8 @@ src_install() {
 	#cp "${FILESDIR}"/monitor "${D}"/etc/webrtc2sip || die "monitor failed to install"
 	#cp "${FILESDIR}"/w2scmd "${D}"/etc/webrtc2sip || die "w2scmd failed to install"
 
-	newinitd "${FILESDIR}"/webrtc2sip-initd webrtc2sip || die "doinitd failed" 
+	newinitd "${FILESDIR}"/webrtc2sip-initd webrtc2sip || die "newinitd failed" 
+	newconfd "${FILESDIR}"/webrtc2sip-confd webrtc2sip || die "newconfd failed" 
 
 	emake DESTDIR="${D}" installdirs
 	emake DESTDIR="${D}" install

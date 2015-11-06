@@ -1,17 +1,43 @@
 #!/usr/bin/php
 <?php
 
+$config = '/etc/conf.d/webrtc2sip';
+$ip = false;
 $state = "";
 $instance = false;
 $instance_count = 10;
 $DEBUG = false;
 
+if(file_exists($config)) {
+
+	$config_array = parse_ini_file($config);
+	if(isset($config_array['instance_count'])) {
+		$instance_count = $config_array['instance_count'];
+	}
+
+	if(isset($config_array['ip'])) {
+		$ip = $config_array['ip'];
+	}
+
+}
+
 if(isset($argv[1]))$state = strtolower($argv[1]);
 if(isset($argv[2]))$instance = $argv[2];
 
-process($state,$instance);
+process($state,$instance,$ip);
 
-function start($instance) {
+function gen_configs($instance_count, $ip) {
+
+	for ($instance = 1; $instance <= $instance_count; $instance++) {
+
+		$config = "/etc/webrtc2sip/instance_".$instance.".xml";
+		if(!file_exists($config)) {
+			file_put_contents($config, gen_config($instance, $ip));
+		}
+	}
+}
+
+function start($instance, $ip = false) {
 
 	global $DEBUG;
 
@@ -27,7 +53,7 @@ function start($instance) {
 
 		if(!file_exists($config)) {
 
-			file_put_contents($config, gen_config($instance));
+			file_put_contents($config, gen_config($instance, $ip));
 
 		}
 
@@ -106,7 +132,7 @@ function stop($instance) {
 }
 
 
-function process($state, $instance) {
+function process($state, $instance, $ip) {
  
 	global $instance_count;
 
@@ -119,7 +145,7 @@ function process($state, $instance) {
 			print "Starting all instances\n";
 
 			for ($x = 1; $x <= $instance_count; $x++) {
-				start($x);
+				start($x,$ip);
 			}
 
 			start_safe();
@@ -128,7 +154,7 @@ function process($state, $instance) {
 
 			print "Stopping instance $instance\n";
 
-			start($instance);
+			start($instance,$ip);
 		}
 
 	} else if($state == "stop") {
@@ -163,6 +189,10 @@ function process($state, $instance) {
                         }
 			sleep(10);
 		}
+	} else if($state == "genconfig") {
+
+		gen_configs($instance_count, $ip);
+
 	}
 
 }
@@ -220,7 +250,9 @@ function become_daemon()
 	}
 }
 
-function gen_config($instance) {
+function gen_config($instance,$ip = false) {
+
+	if(!$ip)$ip = "*";
 
 	$ports = get_ports($instance);
 
@@ -233,8 +265,8 @@ return "<?xml version=\"1.0\" encoding=\"utf-8\" ?>
 
 <debug-level>ERROR</debug-level>
 
-<transport>udp;*;$udp</transport>
-<transport>wss;*;$wss</transport>
+<transport>udp;$ip;$udp</transport>
+<transport>wss;$ip;$wss</transport>
 
 <enable-rtp-symetric>yes</enable-rtp-symetric>
 <enable-100rel>no</enable-100rel>
