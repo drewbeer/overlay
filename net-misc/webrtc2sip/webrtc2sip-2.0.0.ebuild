@@ -49,12 +49,16 @@ src_compile() {
 src_install() {
 	export LDFLAGS="-ldl -lpthread"
 
-        mkdir -p "${D}/etc/webrtc2sip"
+        mkdir -p "${D}"/etc/webrtc2sip
 
-	cp "${FILESDIR}"/monitor "${D}/etc/webrtc2sip"
-	cp "${FILESDIR}"/w2scmd "${D}/etc/webrtc2sip"
+        dodir /usr/sbin
+        cp "${FILESDIR}"/w2smonitor "${D}"/usr/sbin/ || die "monitor failed to install"
+        cp "${FILESDIR}"/w2scmd "${D}"/usr/sbin/ || die "w2scmd failed to install"
 
-	doinitd "${FILESDIR}"/webrtc2sip || die "doinitd failed" 
+	#cp "${FILESDIR}"/monitor "${D}"/etc/webrtc2sip || die "monitor failed to install"
+	#cp "${FILESDIR}"/w2scmd "${D}"/etc/webrtc2sip || die "w2scmd failed to install"
+
+	newinitd "${FILESDIR}"/webrtc2sip-initd webrtc2sip || die "doinitd failed" 
 
 	emake DESTDIR="${D}" installdirs
 	emake DESTDIR="${D}" install

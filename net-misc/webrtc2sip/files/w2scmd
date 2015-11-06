@@ -40,7 +40,7 @@ function start($instance) {
 	
 	if(strlen($check_monitor_running) <= 0) {
 
-		`/usr/bin/screen -dm -S webrtc2sipMonitor$instance bash -c 'cd /etc/webrtc2sip; php monitor $monitor'`;
+		`/usr/bin/screen -dm -S webrtc2sipMonitor$instance bash -c 'w2smonitor $monitor'`;
 
 	} else {
 		if($DEBUG)print "Instance $instance monitor already Running!\n";
@@ -150,7 +150,7 @@ function process($state, $instance) {
 		$DEBUG = false;
 
 		set_time_limit(0);
-		become_daemon();
+		#become_daemon();
 		while(1) {
                         for ($x = 1; $x <= $instance_count; $x++) {
                                 start($x);
@@ -173,7 +173,7 @@ function stop_safe() {
 function start_safe() {
 	$safe_pid = get_safe_pid();
 	if(!$safe_pid) {
-		`/usr/bin/screen -dm -S webrtc2sipSafe /etc/webrtc2sip/w2scmd safe`;
+		`/usr/bin/screen -dm -S webrtc2sipSafe /usr/sbin/w2scmd safe`;
 	}
 }
 
