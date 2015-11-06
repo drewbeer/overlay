@@ -25,7 +25,11 @@ function start($instance) {
 
 		$config = "/etc/webrtc2sip/instance_".$instance.".xml";
 
-		file_put_contents($config, gen_config($instance));
+		if(!file_exists($config)) {
+
+			file_put_contents($config, gen_config($instance));
+
+		}
 
 		//print "/usr/bin/screen -dm -S webrtc2sip$instance bash -c 'ulimit -n 65535; /usr/sbin/webrtc2sip --config=$config >> /var/log/webrtc2sip$instance.log 2>&1; exec sh'\n";
 
