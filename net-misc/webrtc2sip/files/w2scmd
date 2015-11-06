@@ -108,6 +108,8 @@ function process($state, $instance) {
 
 	if($state == "start") {
 
+		`echo 15 > /proc/sys/net/ipv4/tcp_fin_timeout`;
+
 		if(!$instance) {
 	
 			print "Starting all instances\n";
