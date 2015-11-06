@@ -17,7 +17,8 @@ KEYWORDS="amd64 x86"
 
 DEPEND=" >=net-libs/libsrtp-1.5.2-r1
 	 >=net-misc/doubango-2.0.0
-	app-misc/screen"
+	app-misc/screen
+	dev-lang/php"
 
 S="${WORKDIR}/webrtc2sip"
 
@@ -49,15 +50,16 @@ src_install() {
 	export LDFLAGS="-ldl -lpthread"
 
         mkdir -p "${D}/etc/webrtc2sip"
-        mkdir -p "${D}/etc/webrtc2sip/www"
 
-	//cp "${FILESDIR}"/webrtc2sip-x.xml "${D}/etc/webrtc2sip"
-	cp "${FILESDIR}"/index.php "${D}/etc/webrtc2sip/www/"
+	cp "${FILESDIR}"/monitor "${D}/etc/webrtc2sip"
+	cp "${FILESDIR}"/w2scmd "${D}/etc/webrtc2sip"
 
-        newinitd "${FILESDIR}"/w2s w2s
+	doinitd "${FILESDIR}"/webrtc2sip || die "doinitd failed" 
 
 	emake DESTDIR="${D}" installdirs
 	emake DESTDIR="${D}" install
 
+
 }
+
 

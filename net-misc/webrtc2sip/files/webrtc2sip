@@ -1,0 +1,29 @@
+#!/sbin/runscript
+# Copyright 1999-2014 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+
+extra_started_commands="killall"
+
+pid_file="/run/w2s.pid"
+
+start() {
+        ebegin "Starting all webrtc2sip instances"
+	start-stop-daemon --start --pidfile ${pid_file} \
+		--exec /etc/webrtc2sip/w2scmd start
+	eend $?
+}
+
+stop() {
+        ebegin "Stopping all webrtc2sip instances"
+	/etc/webrtc2sip/w2scmd stop
+	start-stop-daemon  --stop --pidfile ${pid_file}
+	eend $?
+}
+
+killall() {
+        ebegin "Force topping all webrtc2sip instances"
+	/etc/webrtc2sip/w2scmd stop
+	start-stop-daemon  --stop --pidfile ${pid_file}
+	eend $?
+}
+

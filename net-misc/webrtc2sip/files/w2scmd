@@ -40,7 +40,7 @@ function start($instance) {
 	
 	if(strlen($check_monitor_running) <= 0) {
 
-		`/usr/bin/screen -dm -S webrtc2sipMonitor$instance bash -c 'cd /etc/webrtc2sip/www; php index.php $monitor'`;
+		`/usr/bin/screen -dm -S webrtc2sipMonitor$instance bash -c 'cd /etc/webrtc2sip; php monitor $monitor'`;
 
 	} else {
 		if($DEBUG)print "Instance $instance monitor already Running!\n";
@@ -173,12 +173,12 @@ function stop_safe() {
 function start_safe() {
 	$safe_pid = get_safe_pid();
 	if(!$safe_pid) {
-		`/usr/bin/screen -dm -S webrtc2sipSafe /etc/init.d/w2s safe`;
+		`/usr/bin/screen -dm -S webrtc2sipSafe /etc/webrtc2sip/w2scmd safe`;
 	}
 }
 
 function get_safe_pid() {
-	return trim(`ps ax | grep 'w2s safe' | grep -iv grep | awk '{print \$1}'`);
+	return trim(`ps ax | grep 'w2scmd safe' | grep -iv grep | awk '{print \$1}'`);
 }
 
 function get_ports($instance) {
