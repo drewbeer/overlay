@@ -54,6 +54,8 @@ src_install() {
 	//cp "${FILESDIR}"/webrtc2sip-x.xml "${D}/etc/webrtc2sip"
 	cp "${FILESDIR}"/index.php "${D}/etc/webrtc2sip/www/"
 
+        newinitd "${FILESDIR}"/w2s w2s
+
 	emake DESTDIR="${D}" installdirs
 	emake DESTDIR="${D}" install
 

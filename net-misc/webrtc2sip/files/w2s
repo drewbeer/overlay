@@ -3,6 +3,8 @@
 
 $state = "";
 $instance = false;
+$instance_count = 10;
+$DEBUG = false;
 
 if(isset($argv[1]))$state = strtolower($argv[1]);
 if(isset($argv[2]))$instance = $argv[2];
@@ -10,6 +12,8 @@ if(isset($argv[2]))$instance = $argv[2];
 process($state,$instance);
 
 function start($instance) {
+
+	global $DEBUG;
 
         $ports = get_ports($instance);
         $wss = $ports['wss'];
@@ -28,7 +32,7 @@ function start($instance) {
 		`/usr/bin/screen -dm -S webrtc2sip$instance bash -c 'ulimit -n 65535; /usr/sbin/webrtc2sip --config=$config >> /var/log/webrtc2sip$instance.log 2>&1; exec sh'`;
 
 	} else {
-		print "Instance $instance already Running!\n";
+		if($DEBUG)print "Instance $instance already Running!\n";
 	}
 
 
@@ -36,10 +40,10 @@ function start($instance) {
 	
 	if(strlen($check_monitor_running) <= 0) {
 
-		`screen -dm -S webrtc2sipMonitor$instance bash -c 'cd /opt/webrtc2sip/www; php -S 0.0.0.0:$monitor'`;
+		`/usr/bin/screen -dm -S webrtc2sipMonitor$instance bash -c 'cd /etc/webrtc2sip/www; php index.php $monitor'`;
 
 	} else {
-		print "Instance $instance monitor already Running!\n";
+		if($DEBUG)print "Instance $instance monitor already Running!\n";
 	}
 
 
@@ -63,6 +67,25 @@ function stop($instance) {
 		}
 	}
 
+        $check_screen_running = `ps ax | grep -i /usr/bin/SCREEN | grep webrtc2sip$instance | grep -iv grep | awk '{print \$1}'`;
+	$screen_list = explode("\n", $check_screen_running);
+
+	if(!is_array($screen_list)) {
+		$screen_list = array($screen_list);
+	}
+
+	foreach($screen_list as $screen_pid) {	
+
+		if(strlen($screen_pid) > 0) {
+			if(is_numeric($screen_pid)) {
+				print "Screen $screen_pid stopped!\n";
+				posix_kill($screen_pid, 9);
+			} else {
+				print "screen pid not found!\n";
+			}
+		}
+	}	
+
 	$check_monitor_running = trim(`netstat -npa | grep ':$monitor' | awk '{print \$7}'`);
 	if(strlen($check_monitor_running) > 0) {
 		$pid_array = explode("/", $check_monitor_running);
@@ -81,32 +104,81 @@ function stop($instance) {
 
 function process($state, $instance) {
  
+	global $instance_count;
+
 	if($state == "start") {
 
 		if(!$instance) {
 	
-			for ($x = 1; $x <= 10; $x++) {
+			print "Starting all instances\n";
+
+			for ($x = 1; $x <= $instance_count; $x++) {
 				start($x);
 			}
 
+			start_safe();
+
 		} else if($instance) {
+
+			print "Stopping instance $instance\n";
+
 			start($instance);
 		}
 
 	} else if($state == "stop") {
 
 		if(!$instance) {
-	
-			for ($x = 1; $x <= 10; $x++) {
+
+			print "Stopping all instances\n";	
+
+			for ($x = 1; $x <= $instance_count; $x++) {
 				stop($x);
 			}
 	
+			stop_safe();
+
 		} else if($instance) {
+			
+			print "Stopping instance $instance\n";
+			
 			stop($instance);
 		}
 
+	} else if($state == "safe") {
+		
+		global $DEBUG;
+		$DEBUG = false;
+
+		set_time_limit(0);
+		become_daemon();
+		while(1) {
+                        for ($x = 1; $x <= $instance_count; $x++) {
+                                start($x);
+                        }
+			sleep(10);
+		}
 	}
 
+}
+
+function stop_safe() {
+
+	$safe_pid = get_safe_pid();
+	if($safe_pid) {
+		posix_kill($safe_pid, 9);
+	}	
+}
+
+
+function start_safe() {
+	$safe_pid = get_safe_pid();
+	if(!$safe_pid) {
+		`/usr/bin/screen -dm -S webrtc2sipSafe /etc/init.d/w2s safe`;
+	}
+}
+
+function get_safe_pid() {
+	return trim(`ps ax | grep 'w2s safe' | grep -iv grep | awk '{print \$1}'`);
 }
 
 function get_ports($instance) {
@@ -116,6 +188,30 @@ function get_ports($instance) {
 	$monitor = $wss + 10000;
 
 	return array('udp' => $udp, 'wss' => $wss, 'monitor' => $monitor);
+}
+
+
+/**
+  * Become a daemon by forking and closing the parent
+  */
+function become_daemon()
+{
+	$pid = pcntl_fork();
+
+	if ($pid == -1) {
+		/* fork failed */
+		echo "fork failure!\n";
+		exit();
+	} else if ($pid) {
+		/* close the parent */        
+		exit();
+	} else {
+		/* child becomes our daemon */
+		posix_setsid();
+		chdir('/');
+		umask(0);
+		return posix_getpid();
+	}
 }
 
 function gen_config($instance) {
