@@ -184,7 +184,7 @@ function start_safe() {
 }
 
 function get_safe_pid() {
-	return trim(`ps ax | grep 'w2scmd safe' | grep -iv grep | awk '{print \$1}'`);
+	return trim(`ps ax | grep 'w2scmd safe' | grep -iv grep | grep -iv screen | awk '{print \$1}'`);
 }
 
 function get_ports($instance) {
