@@ -1,14 +1,28 @@
 #!/usr/bin/php
 <?php
 
+$config = '/etc/conf.d/webrtc2sip';
+$ip = "0.0.0.0";
 $timeMax = 10;
 $closeMax = 10;
 $port = $argv[1] - 10000;
 $monitor_port = $argv[1];
 
+if(file_exists($config)) {
+
+        $config_array = parse_ini_file($config);
+
+        if(isset($config_array['ip'])) {
+                $ip = $config_array['ip'];
+        }
+
+}
+
+
+
 date_default_timezone_set('America/Los_Angeles');
 set_time_limit(0);
-$socket = stream_socket_server("tcp://0.0.0.0:$monitor_port", $errno, $errstr);
+$socket = stream_socket_server("tcp://$ip:$monitor_port", $errno, $errstr);
 
 if (!$socket) {
 	echo "$errstr ($errno) \n";
