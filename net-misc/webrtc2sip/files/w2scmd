@@ -257,8 +257,8 @@ return "<?xml version=\"1.0\" encoding=\"utf-8\" ?>
 <nameserver>8.8.8.8</nameserver>
 
 <ssl-certificates>
-/etc/ssl/safesoft.io.key;
-/etc/ssl/safesoft.io.crt;
+/etc/ssl/safesoft-io-priv.pem;
+/etc/ssl/safesoft-io-pub.pem;
 *;
 no
 </ssl-certificates>
