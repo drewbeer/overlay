@@ -6,7 +6,7 @@ EAPI=4
 
 DESCRIPTION="RFC3261 compliant SIP User-Agent library"
 HOMEPAGE="http://sofia-sip.sourceforge.net/"
-SRC_URI="mirror://sourceforge/${PN}/${P}.tar.gz
+SRC_URI="http://mirrors.safesoft.us/gentoo/portage/net-libs/sofia-sip/${P}.tar.gz
 	http://mirrors.safesoft.us/gentoo/portage/net-libs/sofia-sip/sofia-sip-patchset.tar.gz"
 
 LICENSE="LGPL-2.1+ BSD public-domain" # See COPYRIGHT
@@ -31,6 +31,10 @@ src_configure() {
         econf \
                 $(use_enable static-libs static) \
                 $(use_with ssl openssl)
+}
+
+src_compile() {
+	CFLAGS="-fno-aggressive-loop-optimizations" emake
 }
 
 src_install() {
