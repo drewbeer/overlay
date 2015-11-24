@@ -14,8 +14,8 @@ SLOT="0"
 KEYWORDS="alpha amd64 ~arm ia64 ppc ~ppc64 sparc x86 ~x86-linux"
 IUSE="ssl static-libs"
 
-EPATCH_SUFFIX="patch"
-PATCHES=( "${WORKDIR}/sofia-sip-patchset" )
+#EPATCH_SUFFIX="patch"
+#PATCHES=( "${WORKDIR}/sofia-sip-patchset" )
 
 RDEPEND="dev-libs/glib:2
         ssl? ( dev-libs/openssl )"

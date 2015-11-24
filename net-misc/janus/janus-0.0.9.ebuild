@@ -11,10 +11,14 @@ MY_P="${PN}-${PV/_/-}"
 DESCRIPTION="Janus WebRTC Gateway: Janus is an open source, general purpose, WebRTC gateway designed and developed by Meetecho."
 HOMEPAGE="http://janus.conf.meetecho.com/"
 SRC_URI="http://mirrors.safesoft.us/gentoo/portage/net-misc/janus/${MY_P}.tar.gz"
+#http://mirrors.safesoft.us/gentoo/portage/net-misc/janus/janus-patchset.tar.gz"
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="amd64 x86"
 IUSE="websockets rabbitmq docs opus ogg"
+
+#EPATCH_SUFFIX="patch"
+#PATCHES=( "${WORKDIR}/janus-patchset" )
 
 DEPEND="docs? ( app-doc/doxygen media-gfx/graphviz )
 	opus? ( media-libs/opus )
@@ -29,7 +33,8 @@ DEPEND="docs? ( app-doc/doxygen media-gfx/graphviz )
 	>=net-libs/libsrtp-1.5.2-r1
 	net-libs/sofia-sip
 	dev-libs/glib
-	dev-util/gengetopt"
+	dev-util/gengetopt
+	>=sys-devel/gcc-4.9.3:4.9"
 
 
 S="${WORKDIR}/janus-gateway"
