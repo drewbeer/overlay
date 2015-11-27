@@ -2,6 +2,7 @@
 # Copyright 1999-2014 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
+
 janus_svcname() {
         local ebextra=
         case "${SVCNAME}" in
@@ -18,6 +19,8 @@ start() {
 
 	pid_file="/var/run/${SVCNAME}.pid"
 
+	ulimit -c unlimited
+
 	export G_MESSAGES_DEBUG=false
 	export NICE_DEBUG=false
 
@@ -30,7 +33,7 @@ start() {
 
         start-stop-daemon --start --exec /usr/bin/janus \
                 --pidfile ${pid_file} --make-pidfile --background \
-                -- -F${JANUS_CNF_PATH}
+                -- -F${JANUS_CNF_PATH} -N -L /var/log/janus.log
 	eend $?
 
         save_options pidfile "${pidfile}"
