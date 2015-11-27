@@ -68,9 +68,6 @@ src_install() {
 
         dodir /usr/sbin
 
-        cp "${FILESDIR}"/jmonitor "${D}"/usr/sbin/ || die "monitor failed to install"
-        cp "${FILESDIR}"/w2scmd "${D}"/usr/sbin/ || die "w2scmd failed to install"
-
         newinitd "${FILESDIR}"/janus-initd janus || die "newinitd failed"
 
 	emake DESTDIR="${D}" installdirs

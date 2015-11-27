@@ -16,7 +16,7 @@ start() {
 
         ebegin "Starting $(janus_svcname)"
 
-	pid_file="/run/${SVCNAME}.pid"
+	pid_file="/var/run/${SVCNAME}.pid"
 
 	export G_MESSAGES_DEBUG=false
 	export NICE_DEBUG=false
@@ -41,7 +41,7 @@ stop() {
 
         ebegin "Stopping $(janus_svcname)"
 
-	pid_file="/run/${SVCNAME}.pid"
+	pid_file="/var/run/${SVCNAME}.pid"
 
 	ebegin "${pid_file}"
 
