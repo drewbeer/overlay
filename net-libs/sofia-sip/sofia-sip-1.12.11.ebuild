@@ -18,6 +18,7 @@ IUSE="ssl static-libs"
 #PATCHES=( "${WORKDIR}/sofia-sip-patchset" )
 
 RDEPEND="dev-libs/glib:2
+	<=sys-devel/gcc-4.7.4
         ssl? ( dev-libs/openssl )"
 DEPEND="${RDEPEND}
         virtual/pkgconfig"
