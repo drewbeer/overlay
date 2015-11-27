@@ -2,6 +2,7 @@
 # Copyright 1999-2014 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
+extra_started_commands="forcestop"
 
 janus_svcname() {
         local ebextra=
@@ -12,6 +13,98 @@ janus_svcname() {
         echo "${SVCNAME}${ebextra}"
 }
 
+
+
+is_running() {
+
+	pid_file="/var/run/${SVCNAME}.pid"
+                
+	if [ "$(pidof janus)" ]; then
+		echo "$(pidof janus)" > ${pid_file}
+	fi
+
+        [ -r "${pid_file}" ] || return 1
+        PID="$(cat "${pid_file}")"
+        [ -d "/proc/${PID}" ] || return 1
+        EXE="$(readlink -f /proc/${PID}/exe)"
+        EXE="${EXE% (deleted)}" # in case janus got upgraded and we're still looking at an old one.
+        [ "${EXE}" = /usr/bin/janus ] || return 1 # pid got re-used for another process.
+
+        # PID reported in pidfile is active, and is still an janus instance.
+        return 0
+}
+
+
+janus_run_loop() {
+        local result=0 signal=0
+
+        pid_file="/var/run/${SVCNAME}.pid"
+
+        echo "Initializing $(janus_svcname) wrapper"
+        
+        trap "rm -f '/var/run/janus_wrapper_loop.running'" EXIT
+        touch "/var/run/janus_wrapper_loop.running"
+
+        while [ -r "/var/run/janus_wrapper_loop.running" ]; do
+
+	        export G_MESSAGES_DEBUG=false
+	        export NICE_DEBUG=false
+
+	        JANUS_CNF_PATH="${JANUS_CNF_PATH:-/etc/${SVCNAME}}"
+
+		if [ ! "$(pidof janus)" ]; then
+			/usr/bin/janus -F${JANUS_CNF_PATH} -N -L /var/log/janus.log 
+			echo "$(pidof janus)" > ${pid_file}
+                        result=$?
+		fi
+
+                if [ "$result" -eq 0 ]; then
+                        echo "Janus terminated normally"
+                        break
+                else
+                        if [ "$result" -gt 128 ]; then
+                                signal="$(expr "$result" - 128)"
+                                MSG="Janus terminated with Signal: $signal"
+
+                                CORE_TARGET="core-$(date "+%Y%m%d-%H%M%S")"
+
+                                local CORE_DUMPED=0
+                                if [ -f "${JANUS_CORE_DIR}/core" ]; then
+                                        mv "${JANUS_CORE_DIR}/core" \
+                                           "${JANUS_CORE_DIR}/${CORE_TARGET}"
+                                        CORE_DUMPED=1
+
+                                elif [ -f "${JANUS_CORE_DIR}/core.${PID}" ]; then
+                                        mv "${JANUS_CORE_DIR}/core.${PID}" \
+                                           "${JANUS_CORE_DIR}/${CORE_TARGET}"
+                                        CORE_DUMPED=1
+
+                                fi
+
+                                [ $CORE_DUMPED -eq 1 ] && \
+                                        MSG="${MSG}\n\rCore dumped: ${JANUS_CORE_DIR}/${CORE_TARGET}"
+                        else
+                                MSG="Janus terminated with return code: $result"
+                        fi
+
+                        # kill left-over tasks
+                        for X in ${JANUS_CLEANUP_ON_CRASH}; do
+                                kill -9 "$(pidof "${X}")";
+                        done
+                fi
+
+                if [ -n "${JANUS_NOTIFY_EMAIL}" ] && \
+                   [ -x /usr/sbin/sendmail ]; then
+                        echo -e -n "Subject: Janus crashed\r\n${MSG}\r\n" |\
+                                 /usr/sbin/sendmail "${JANUS_NOTIFY_EMAIL}"
+                fi
+                sleep "${JANUS_RESTART_DELAY}"
+                echo "Restarting Janus..."
+        done
+
+        echo "Terminating wrapper loop."
+        return 0
+}
 
 start() {
 
@@ -31,24 +124,78 @@ start() {
                 return 1
         fi
 
-        start-stop-daemon --start --exec /usr/bin/janus \
-                --pidfile ${pid_file} --make-pidfile --background \
-                -- -F${JANUS_CNF_PATH} -N -L /var/log/janus.log
-	eend $?
+#        start-stop-daemon --start --exec /usr/bin/janus \
+#                --pidfile ${pid_file} --make-pidfile --background \
+#                -- -F${JANUS_CNF_PATH} -N -L /var/log/janus.log
 
-        save_options pidfile "${pidfile}"
+        janus_run_loop 2>&1 | logger -t "wrapper:$(janus_svcname)" &
+        result=$?
 
+        if [ $result -eq 0 ]; then
+                # 2 seconds should be enough for janus to start
+                sleep 2
+                is_running
+                result=$?
+
+                [ $result -eq 0 ] || wrapperstop
+        fi
+
+
+}
+
+wrapperstop() {
+        # Accomodate system upgrades (so a previous version of the wrapper script that still uses a pid file may be running).
+        if [ -r "/var/run/janus_wrapper_loop.pid" ]; then
+                ebegin "Killing janus wrapper script"
+                kill "$(cat /var/run/janus_wrapper_loop.pid)"
+                eend $?
+        fi
+
+        # The new one (due to "hardened" requirements) uses a simpler
+        # flag to indicate running or shutting down.
+        if [ -r "/var/run/janus_wrapper_loop.running" ]; then
+                ebegin "Signalling wrapper script to terminate"
+                rm "/var/run/janus_wrapper_loop.running"
+                eend $?
+        fi
+
+        return 0
 }
 
 stop() {
 
         ebegin "Stopping $(janus_svcname)"
 
+	wrapperstop
+
 	pid_file="/var/run/${SVCNAME}.pid"
 
-	ebegin "${pid_file}"
+        if is_running; then
+                einfon "Waiting for janus to shutdown ."
+                local cnt=0
+                while is_running; do
+                        cnt="$(expr $cnt + 1)"
+                        if [ $cnt -gt 5 ] ; then
 
-	start-stop-daemon --stop -q --pidfile ${pid_file}
-        eend $?
+		                if [ "$(pidof janus)" ]; then
+		                        echo "$(pidof janus)" > ${pid_file}
+		                fi
+
+                                start-stop-daemon --stop --pidfile ${pid_file}
+                                return
+                        fi
+                        if [ $cnt -gt 60 ] ; then
+                                # Waited 120 seconds now. Fail.
+                                echo
+                                eend 1 "Failed."
+                                return
+                        fi
+                        sleep 2
+                        echo -n "."
+                done
+                echo
+        fi
+        eend 0
+
 }
 

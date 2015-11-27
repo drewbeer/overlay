@@ -69,6 +69,7 @@ src_install() {
         dodir /usr/sbin
 
         newinitd "${FILESDIR}"/janus-initd janus || die "newinitd failed"
+        newconfd "${FILESDIR}"/janus-confd janus || die "newconfd failed"
 
 	emake DESTDIR="${D}" installdirs
 	emake DESTDIR="${D}" install

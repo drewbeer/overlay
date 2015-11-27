@@ -1,0 +1,22 @@
+# Send crash notifications emails to this address
+# (needs a working mail service and /usr/sbin/sendmail to do so (e.g. ssmtp))
+#
+# Value: Email address or empty to disable
+#
+#JANUS_NOTIFY_EMAIL="root"
+
+#
+# ASTERISK_CORE_DIR
+#
+# Value: Directory (will be created if non-existant), default is /tmp
+#
+JANUS_CORE_DIR="/etc/janus"
+
+
+#
+# Delay time before restarting janus after a crash.
+#
+# Value: Number of seconds to sleep after a crash before restarting.
+#
+JANUS_RESTART_DELAY=5
+
