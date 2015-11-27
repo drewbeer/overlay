@@ -1,0 +1,51 @@
+#!/sbin/runscript
+# Copyright 1999-2014 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+
+janus_svcname() {
+        local ebextra=
+        case "${SVCNAME}" in
+                janus*) ;;
+                *) ebextra=" (janus)" ;;
+        esac
+        echo "${SVCNAME}${ebextra}"
+}
+
+
+start() {
+
+        ebegin "Starting $(janus_svcname)"
+
+	pid_file="/run/${SVCNAME}.pid"
+
+	export G_MESSAGES_DEBUG=false
+	export NICE_DEBUG=false
+
+        JANUS_CNF_PATH="${JANUS_CNF_PATH:-/etc/${SVCNAME}}"
+
+        if [ ! -r "${JANUS_CNF_PATH}/janus.cfg" ] ; then
+                eerror "Cannot read the configuration file \`${JANUS_CNF_PATH}/janus.cfg'"
+                return 1
+        fi
+
+        start-stop-daemon --start --exec /usr/bin/janus \
+                --pidfile ${pid_file} --make-pidfile --background \
+                -- -F${JANUS_CNF_PATH}
+	eend $?
+
+        save_options pidfile "${pidfile}"
+
+}
+
+stop() {
+
+        ebegin "Stopping $(janus_svcname)"
+
+	pid_file="/run/${SVCNAME}.pid"
+
+	ebegin "${pid_file}"
+
+	start-stop-daemon --stop -q --pidfile ${pid_file}
+        eend $?
+}
+
