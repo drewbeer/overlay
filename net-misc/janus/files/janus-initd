@@ -19,10 +19,6 @@ is_running() {
 
 	pid_file="/var/run/${SVCNAME}.pid"
                 
-	if [ "$(pidof janus)" ]; then
-		echo "$(pidof janus)" > ${pid_file}
-	fi
-
         [ -r "${pid_file}" ] || return 1
         PID="$(cat "${pid_file}")"
         [ -d "/proc/${PID}" ] || return 1
@@ -52,11 +48,8 @@ janus_run_loop() {
 
 	        JANUS_CNF_PATH="${JANUS_CNF_PATH:-/etc/${SVCNAME}}"
 
-		if [ ! "$(pidof janus)" ]; then
-			/usr/bin/janus -F${JANUS_CNF_PATH} -N -L /var/log/janus.log 
-			echo "$(pidof janus)" > ${pid_file}
-                        result=$?
-		fi
+		/usr/bin/janus -F${JANUS_CNF_PATH} -N -L /var/log/janus.log -p ${pid_file}
+		result=$?
 
                 if [ "$result" -eq 0 ]; then
                         echo "Janus terminated normally"
@@ -89,7 +82,7 @@ janus_run_loop() {
 
                         # kill left-over tasks
                         for X in ${JANUS_CLEANUP_ON_CRASH}; do
-                                kill -9 "$(pidof "${X}")";
+                                kill -9 "${PID}";
                         done
                 fi
 
@@ -176,10 +169,6 @@ stop() {
                 while is_running; do
                         cnt="$(expr $cnt + 1)"
                         if [ $cnt -gt 5 ] ; then
-
-		                if [ "$(pidof janus)" ]; then
-		                        echo "$(pidof janus)" > ${pid_file}
-		                fi
 
                                 start-stop-daemon --stop --pidfile ${pid_file}
                                 return
