@@ -33,9 +33,8 @@ DEPEND="docs? ( app-doc/doxygen media-gfx/graphviz )
 	net-libs/sofia-sip
 	dev-libs/glib
 	app-misc/screen
-	dev-util/gengetopt"
-
-#	dev-libs/ding-libs
+	dev-util/gengetopt
+	dev-libs/ding-libs"
 
 
 S="${WORKDIR}/janus-gateway"
