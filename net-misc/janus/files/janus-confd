@@ -20,3 +20,4 @@ JANUS_CORE_DIR="/etc/janus"
 #
 JANUS_RESTART_DELAY=5
 
+JANUS_OPTS="-b"

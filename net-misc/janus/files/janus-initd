@@ -48,7 +48,7 @@ janus_run_loop() {
 
 	        JANUS_CNF_PATH="${JANUS_CNF_PATH:-/etc/${SVCNAME}}"
 
-		/usr/bin/janus -F${JANUS_CNF_PATH} -N -L /var/log/janus.log -p ${pid_file}
+		/usr/bin/janus -F${JANUS_CNF_PATH} -N -L ${JANUS_OPTS} /var/log/janus.log -p ${pid_file}
 		result=$?
 
                 if [ "$result" -eq 0 ]; then
