@@ -20,3 +20,7 @@ JANUS_CORE_DIR="/etc/janus"
 #
 JANUS_RESTART_DELAY=5
 
+# use this if you like to disable the safe wrapper script
+#JANUS_OPTS="-b"
+
+JANUS_OPTS=""

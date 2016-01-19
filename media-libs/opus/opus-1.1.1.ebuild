@@ -24,6 +24,8 @@ IUSE="custom-modes doc static-libs"
 
 DEPEND="doc? ( app-doc/doxygen )"
 
+#PATCHES=( "${FILESDIR}/1.1-fix-configure.ac-shell-bug.patch" ) # bug 510918
+
 src_configure() {
 	local myeconfargs=(
 		$(use_enable custom-modes)
