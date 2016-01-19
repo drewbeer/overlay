@@ -117,21 +117,21 @@ start() {
                 return 1
         fi
 
-#        start-stop-daemon --start --exec /usr/bin/janus \
-#                --pidfile ${pid_file} --make-pidfile --background \
-#                -- -F${JANUS_CNF_PATH} -N -L /var/log/janus.log
+        start-stop-daemon --start --exec /usr/bin/janus \
+                --background \
+                -- -F${JANUS_CNF_PATH} -N -L /var/log/janus.log -p ${pid_file}
 
-        janus_run_loop 2>&1 | logger -t "wrapper:$(janus_svcname)" &
-        result=$?
+#        janus_run_loop 2>&1 | logger -t "wrapper:$(janus_svcname)" &
+#        result=$?
 
-        if [ $result -eq 0 ]; then
-                # 2 seconds should be enough for janus to start
-                sleep 2
-                is_running
-                result=$?
-
-                [ $result -eq 0 ] || wrapperstop
-        fi
+#        if [ $result -eq 0 ]; then
+#                # 2 seconds should be enough for janus to start
+#                sleep 2
+#                is_running
+#                result=$?
+#
+#                [ $result -eq 0 ] || wrapperstop
+#        fi
 
 
 }
