@@ -106,6 +106,7 @@ start() {
 	pid_file="/var/run/${SVCNAME}.pid"
 
 	ulimit -c unlimited
+	ulimit -n 64000
 
 	export G_MESSAGES_DEBUG=false
 	export NICE_DEBUG=false
