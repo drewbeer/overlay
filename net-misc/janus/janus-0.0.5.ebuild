@@ -15,7 +15,7 @@ SRC_URI="http://mirrors.safesoft.us/gentoo/portage/net-misc/janus/${MY_P}.tar.gz
 LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="amd64 x86"
-IUSE="websockets rabbitmq docs opus ogg"
+IUSE="websockets rabbitmq docs opus ogg data-channels"
 
 #EPATCH_SUFFIX="patch"
 #PATCHES=( "${WORKDIR}/janus-patchset" )
@@ -25,6 +25,7 @@ DEPEND="docs? ( app-doc/doxygen media-gfx/graphviz )
 	ogg? ( media-libs/libogg )
 	websockets? ( net-libs/libwebsockets dev-util/cmake )
 	rabbitmq? ( net-libs/rabbitmq-c )
+	data-channels? ( net-libs/usrsctp )
 	net-libs/libmicrohttpd
 	dev-libs/jansson
 	net-libs/libnice[-upnp]
@@ -35,7 +36,6 @@ DEPEND="docs? ( app-doc/doxygen media-gfx/graphviz )
 	app-misc/screen
 	dev-util/gengetopt
 	dev-libs/ding-libs"
-
 
 S="${WORKDIR}/janus-gateway"
 
@@ -50,7 +50,7 @@ src_configure() {
 
 	econf \
 		--prefix=/usr \
-		--disable-data-channels \
+		$(use_enable data-channels) \
 		$(use_enable websockets) \
 		$(use_enable rabbitmq) \
 		$(use_enable docs)
