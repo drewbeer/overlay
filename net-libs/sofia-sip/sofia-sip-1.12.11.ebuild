@@ -15,7 +15,6 @@ KEYWORDS="alpha amd64 ~arm ia64 ppc ~ppc64 sparc x86 ~x86-linux"
 IUSE="ssl static-libs"
 
 RDEPEND="dev-libs/glib:2
-        <=sys-devel/gcc-4.7.4
         ssl? ( dev-libs/openssl )"
 DEPEND="${RDEPEND}
         virtual/pkgconfig"
