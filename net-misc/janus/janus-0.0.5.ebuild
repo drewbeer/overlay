@@ -16,6 +16,7 @@ LICENSE="GPL-2"
 SLOT="0"
 KEYWORDS="amd64 x86"
 IUSE="websockets rabbitmq docs opus ogg data-channels"
+FEATURES="nostrip"
 
 #EPATCH_SUFFIX="patch"
 #PATCHES=( "${WORKDIR}/janus-patchset" )
