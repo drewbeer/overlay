@@ -4,6 +4,8 @@
 
 extra_started_commands="forcestop"
 
+ulimit -c unlimited
+
 janus_svcname() {
         local ebextra=
         case "${SVCNAME}" in
@@ -47,6 +49,8 @@ janus_run_loop() {
 	        export NICE_DEBUG=false
 
 	        JANUS_CNF_PATH="${JANUS_CNF_PATH:-/etc/${SVCNAME}}"
+
+		cd /etc/janus
 
 		/usr/bin/janus -F${JANUS_CNF_PATH} ${JANUS_OPTS} -N -L /var/log/janus.log -p ${pid_file}
 		result=$?
@@ -118,21 +122,21 @@ start() {
                 return 1
         fi
 
-        start-stop-daemon --start --exec /usr/bin/janus \
-                --background \
-                -- -F${JANUS_CNF_PATH} -N -L /var/log/janus.log -p ${pid_file}
+#        start-stop-daemon --start --exec /usr/bin/janus \
+#                --background \
+#                -- -F${JANUS_CNF_PATH} -N -L /var/log/janus.log -p ${pid_file}
 
-#        janus_run_loop 2>&1 | logger -t "wrapper:$(janus_svcname)" &
-#        result=$?
+        janus_run_loop &
+        result=$?
 
-#        if [ $result -eq 0 ]; then
-#                # 2 seconds should be enough for janus to start
-#                sleep 2
-#                is_running
-#                result=$?
-#
-#                [ $result -eq 0 ] || wrapperstop
-#        fi
+        if [ $result -eq 0 ]; then
+                # 2 seconds should be enough for janus to start
+                sleep 2
+                is_running
+                result=$?
+
+                [ $result -eq 0 ] || wrapperstop
+        fi
 
 
 }
