@@ -6,7 +6,7 @@ EAPI="2"
 
 inherit eutils
 
-MAGIC="1639-26325ea"
+MAGIC="1663-7efd046"
 URI_PRE="http://downloads.plexapp.com/plex-media-server/${PV}.${MAGIC}/plexmediaserver_${PV}.${MAGIC}_"
 #URI_PRE="http://nightlies.plexapp.com/directdl/plex-media-server/dist-ninja/${PV}.${MAGIC}/plexmediaserver_${PV}.${MAGIC}_"
 
@@ -77,7 +77,6 @@ pkg_preinst() {
 	einfo "prepare default library destination"
 	# also make sure the default library folder is pre created with correct permissions
 	mkdir ${D}var/lib
-	mkdir ${D}var/lib/plexmediaserver
 	chown plex:plex ${D}var/lib/plexmediaserver
 
 	einfo "Stopping running instances of Media Server"
