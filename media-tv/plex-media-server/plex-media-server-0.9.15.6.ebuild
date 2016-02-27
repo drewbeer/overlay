@@ -6,7 +6,7 @@ EAPI="2"
 
 inherit eutils
 
-MAGIC="1663-7efd046"
+MAGIC="1714-7be11e1"
 URI_PRE="http://downloads.plexapp.com/plex-media-server/${PV}.${MAGIC}/plexmediaserver_${PV}.${MAGIC}_"
 #URI_PRE="http://nightlies.plexapp.com/directdl/plex-media-server/dist-ninja/${PV}.${MAGIC}/plexmediaserver_${PV}.${MAGIC}_"
 
