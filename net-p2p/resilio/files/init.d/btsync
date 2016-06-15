@@ -35,8 +35,7 @@ stop() {
 	   --group "${BTSYNC_GROUP}" \
 	   --exec "${SYNC_BINARY}" \
 	   --wait 5000 \
-	   --retry SIGTERM/5 
+	   --retry SIGTERM/5
 
 	eend $?
 }
-

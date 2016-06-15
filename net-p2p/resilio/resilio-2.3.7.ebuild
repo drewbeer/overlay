@@ -1,5 +1,6 @@
 # Copyright (C) 2013-2014 Jonathan Vasquez <fearedbliss@funtoo.org>
 # Copyright (C) 2014 Sandy McArthur <Sandy@McArthur.org>
+# Copyright (C) 2015 Scott Alfter <scott@alfter.us>
 # Distributed under the terms of the GNU General Public License v2
 
 EAPI="4"
@@ -7,17 +8,16 @@ EAPI="4"
 inherit eutils user
 NAME="btsync"
 DESCRIPTION="Magic folder style file syncing powered by BitTorrent."
-HOMEPAGE="http://www.bittorrent.com/sync"
+HOMEPAGE="http://www.getsync.com/"
 SRC_URI="
-	amd64?	( http://syncapp.bittorrent.com/${PV}/${NAME}_x64-${PV}.tar.gz )
-	x86?	( http://syncapp.bittorrent.com/${PV}/${NAME}_i386-${PV}.tar.gz )
-	ppc?    ( http://syncapp.bittorrent.com/${PV}/${NAME}_powerpc-${PV}.tar.gz )
-	arm?    ( http://syncapp.bittorrent.com/${PV}/${NAME}_arm-${PV}.tar.gz ) "
+	amd64?	( https://download-cdn.getsync.com/${PV}/linux-x64/BitTorrent-Sync_x64.tar.gz -> ${NAME}_x64-${PV}.tar.gz )
+	x86?	( https://download-cdn.getsync.com/${PV}/linux-i386/BitTorrent-Sync_i386.tar.gz -> ${NAME}_i386-${PV}.tar.gz )
+	arm?	( https://download-cdn.getsync.com/${PV}/linux-arm/BitTorrent-Sync_arm.tar.gz -> ${NAME}_arm-${PV}.tar.gz )"
 
 RESTRICT="mirror strip"
 LICENSE="BitTorrent"
 SLOT="0"
-KEYWORDS="amd64 x86 arm ppc"
+KEYWORDS="amd64 x86 arm"
 IUSE=""
 
 DEPEND=""
