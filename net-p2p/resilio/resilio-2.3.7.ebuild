@@ -6,7 +6,7 @@
 EAPI="4"
 
 inherit eutils user
-NAME="Resilio"
+NAME="resilio"
 DESCRIPTION="Resilio is magic folder style file syncing powered by BitTorrent."
 HOMEPAGE="http://www.getsync.com/"
 
@@ -58,7 +58,7 @@ src_install() {
 	dodir "/etc/${NAME}"
 	"${D}/opt/resilio/btsync" --dump-sample-config > "${D}/etc/${NAME}/config"
 	sed -i 's|// "pid_file"|   "pid_file"|' "${D}/etc/${NAME}/config"
-	fowners btsync "/etc/${NAME}/config"
+	fowners resilio "/etc/${NAME}/config"
 	fperms 460 "/etc/${NAME}/config"
 }
 
@@ -67,7 +67,7 @@ pkg_preinst() {
 	# Set device name to `hostname`
 	sed -i "s/My Sync Device/$(hostname) Gentoo Linux/"  "${D}/etc/resilio/config"
 	# Update defaults to the btsync's home dir
-	sed -i "s|/home/user|$(egethome btsync)|"  "${D}/etc/resilio/config"
+	sed -i "s|/home/user|$(egethome resilio)|"  "${D}/etc/resilio/config"
 }
 
 pkg_postinst() {
