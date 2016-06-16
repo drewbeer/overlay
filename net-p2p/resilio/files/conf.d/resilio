@@ -1,10 +1,10 @@
-# conf.d file for btsync
+# conf.d file for resilio
 
 # User and group daemon runs as
-BTSYNC_USER="btsync"
-BTSYNC_GROUP="btsync"
+BTSYNC_USER="resilio"
+BTSYNC_GROUP="resilio"
 
-NAME="BitTorrent Sync"
+NAME="Resilio Sync"
 SYNC_NAME="btsync"
 SYNC_PATH="/opt/${SYNC_NAME}/"
 SYNC_BINARY="${SYNC_PATH}/${SYNC_NAME}"
