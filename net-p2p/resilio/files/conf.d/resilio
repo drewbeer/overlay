@@ -1,12 +1,12 @@
 # conf.d file for resilio
 
 # User and group daemon runs as
-BTSYNC_USER="resilio"
-BTSYNC_GROUP="resilio"
+RESILIO_USER="resilio"
+RESILIO_GROUP="resilio"
 
 NAME="Resilio Sync"
-SYNC_NAME="btsync"
+SYNC_NAME="resilio"
 SYNC_PATH="/opt/${SYNC_NAME}/"
-SYNC_BINARY="${SYNC_PATH}/${SYNC_NAME}"
+SYNC_BINARY="${SYNC_PATH}/btsync"
 SYNC_OPTS="--config /etc/${SYNC_NAME}/config"
 SYNC_PIDFILE="/var/run/btsync/${SYNC_NAME}.pid"
