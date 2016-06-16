@@ -1,8 +1,0 @@
-/var/log/asterisk/event_log /var/log/asterisk/full /var/log/asterisk/queue_log /var/log/asterisk/console{ 
-   missingok 
-   rotate 2
-   daily 
-   postrotate 
-       /usr/sbin/asterisk -rx 'logger reload' > /dev/null 2> /dev/null 
-   endscript 
-} 
