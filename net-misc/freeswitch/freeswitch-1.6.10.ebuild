@@ -1,13 +1,10 @@
-# Copyright 1999-2016 Gentoo Foundation
+# Copyright 1999-2015 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 # $Id:$
 
 EAPI="5"
 
-PYTHON_COMPAT=( python2_7 )
-PYTHON_REQ_USE="threads(+)"
-
-inherit autotools eutils flag-o-matic python-single-r1 user java-pkg-opt-2
+inherit autotools eutils flag-o-matic python user java-pkg-opt-2
 
 DESCRIPTION="FreeSWITCH telephony platform"
 HOMEPAGE="http://www.freeswitch.org/"
@@ -17,7 +14,8 @@ LICENSE="MPL-1.1"
 SLOT="0"
 
 SRC_URI="http://files.freeswitch.org/releases/freeswitch/${P}.tar.xz"
-IUSE="esl +libedit odbc postgres +resampler +zrtp debug"
+# No idea what USE=libedit is actually good for
+IUSE="esl libedit odbc +resampler sctp +zrtp debug"
 
 LANGS="de en es es_ar fa fr he hr hu it ja nl pl pt ru sv th zh"
 
@@ -35,13 +33,13 @@ FM_APPLICATIONS="
 	http_cache ladspa lcr +limit memcache mongo nibblebill
 	osp rad_auth random redis rss skel +sms snapshot
 	snom soundtouch +spandsp spy stress +valet_parking vmd
-	+voicemail voicemail_ivr
+	+voicemail voicemail_ivr amd
 "
 FM_TTS="
 	cepstral flite pocketsphinx tts_commandline unimrcp
 "
 FM_CODECS="
-	+amr amrwb bv codec2 com_g729 dahdi_codec +g723_1 +g729
+	+amr amrwb +bv codec2 com_g729 dahdi_codec +g723_1 +g729
 	+h26x +ilbc isac mp4v +opus sangoma_codec silk siren skel_codec
 	theora
 "
@@ -56,7 +54,7 @@ FM_ENDPOINTS="
 	portaudio reference rtc rtmp skinny skypopen +sofia unicall verto
 "
 FM_EVENT_HANDLERS="
-	amqp +cdr_csv cdr_mongodb cdr_pg_csv cdr_sqlite erlang_event
+	+cdr_csv cdr_mongodb cdr_pg_csv cdr_sqlite erlang_event
 	event_multicast +event_socket event_test event_zmq json_cdr
 	radius_cdr snmp
 "
@@ -74,7 +72,7 @@ FM_TIMERS="
 	posix_timer timerfd
 "
 FM_XML="
-	xml_cdr xml_curl xml_ldap xml_radius xml_rpc xml_scgi
+	xml_cdr xml_curl xml_ldap xml_rpc xml_scgi
 "
 FM_EXTERNAL="
 	ssh
@@ -99,10 +97,8 @@ FM_BROKEN=""
 #? mod_mp4 -> want mp4.h (which was in older versions of libmp4v2
 
 REQUIRED_USE="
-	|| ( l10n_de l10n_en l10n_es l10n_fa l10n_fr l10n_he l10n_hr l10n_hu l10n_it l10n_ja l10n_nl l10n_pt l10n_ru l10n_th l10n_zh )
+	|| ( linguas_de linguas_en linguas_es linguas_fa linguas_fr linguas_he linguas_hr linguas_hu linguas_it linguas_ja linguas_nl linguas_pt linguas_ru linguas_th linguas_zh )
 	esl? ( freeswitch_modules_esl )
-	esl_python? ( ${PYTHON_REQUIRED_USE} )
-	freeswitch_modules_cdr_pg_csv? ( postgres )
 	freeswitch_modules_esl? ( esl )
 	freeswitch_modules_limit? ( freeswitch_modules_db freeswitch_modules_hash )
 	freeswitch_modules_nibblebill? ( odbc )
@@ -110,7 +106,6 @@ REQUIRED_USE="
 	freeswitch_modules_lcr? ( odbc )
 	freeswitch_modules_gsmopen? ( freeswitch_modules_spandsp )
 	freeswitch_modules_portaudio_stream? ( freeswitch_modules_portaudio )
-	freeswitch_modules_python? ( ${PYTHON_REQUIRED_USE} )
 	freeswitch_modules_freetdm? ( freetdm_modules_libpri )
 	freeswitch_modules_verto? ( freeswitch_modules_rtc )
 	freetdm_modules_libpri? ( freeswitch_modules_freetdm )
@@ -122,57 +117,48 @@ REQUIRED_USE="
 "
 
 # Though speex is obsolete (see https://wiki.freeswitch.org/wiki/Mod_speex), configure fails without it
-RDEPEND="
-	virtual/libc
-	>=dev-db/sqlite-3.6.20
-	>=dev-libs/libpcre-7.8
+RDEPEND="virtual/libc
 	>=media-libs/speex-1.2_rc1
-	>=net-misc/curl-7.19
 	libedit? ( dev-libs/libedit )
 	odbc? ( dev-db/unixODBC )
-
-	esl_java? ( >=virtual/jre-1.5:* )
-	esl_lua? ( || ( dev-lang/lua:5.1 dev-lang/luajit:2 ) )
+	esl_java? ( >=dev-java/oracle-jdk-bin-1.8:* )
+	esl_lua? ( || ( dev-lang/lua dev-lang/luajit:2 ) )
 	esl_managed? ( >=dev-lang/mono-1.9 )
 	esl_perl? ( dev-lang/perl )
-	esl_python? ( ${PYTHON_DEPS} )
-
+	esl_python? ( dev-lang/python:2.7 )
 	freeswitch_modules_alsa? ( media-libs/alsa-lib )
-	freeswitch_modules_amqp? ( >=net-misc/rabbitmq-server-0.5.2 )
-	freeswitch_modules_cdr_pg_csv? ( dev-db/postgresql )
+	freeswitch_modules_radius_cdr? ( net-dialup/freeradius-client )
+	freeswitch_modules_xml_curl? ( net-misc/curl )
 	freeswitch_modules_enum? ( >=net-libs/ldns-1.6.6 )
-	freeswitch_modules_erlang_event? ( dev-lang/erlang )
-	freeswitch_modules_gsmopen? ( net-libs/ctb[-gpib] app-mobilephone/gsmlib )
-	freeswitch_modules_h323? ( || ( net-libs/openh323 net-libs/ptlib ) )
-	freeswitch_modules_ilbc? ( >=media-libs/ilbc-freeswitch-0.0.1 )
-	freeswitch_modules_java? ( >=virtual/jre-1.5:* )
-	freeswitch_modules_ladspa? ( media-libs/ladspa-sdk )
+	freeswitch_modules_xml_ldap? ( net-nds/openldap )
 	freeswitch_modules_ldap? ( net-nds/openldap )
-	freeswitch_modules_managed? ( >=dev-lang/mono-1.9 )
-	freeswitch_modules_memcache? ( net-misc/memcached )
+	freeswitch_modules_java? ( >=dev-java/oracle-jdk-bin-1.8:* )
+	freeswitch_modules_h323? ( || ( net-libs/openh323 net-libs/ptlib ) )
 	freeswitch_modules_opal? ( net-libs/opal[h323,iax] )
-	freeswitch_modules_opus? ( >=media-libs/opus-1.1 )
+	freeswitch_modules_opus? ( media-libs/opus )
 	freeswitch_modules_osp? ( >=net-libs/osptoolkit-4.0.3 )
 	freeswitch_modules_perl? ( dev-lang/perl[ithreads] )
-	freeswitch_modules_python? ( ${PYTHON_DEPS} )
-	freeswitch_modules_shout? ( media-libs/libogg )
+	freeswitch_modules_python? ( dev-lang/python:2.7[threads] )
+	freeswitch_modules_managed? ( >=dev-lang/mono-1.9 )
+	freeswitch_modules_sndfile? ( media-libs/libsndfile )
+	freeswitch_modules_soundtouch? ( media-libs/libsoundtouch )
 	freeswitch_modules_skypopen? ( x11-base/xorg-server x11-apps/xhost net-im/skype media-fonts/font-misc-misc media-fonts/font-cursor-misc )
-	freeswitch_modules_sndfile? ( >=media-libs/libsndfile-1.0.20 )
+	freeswitch_modules_memcache? ( net-misc/memcached )
+	freeswitch_modules_erlang_event? ( dev-lang/erlang )
+	freeswitch_modules_shout? ( media-libs/libogg >=media-sound/mpg123-1.20 media-libs/libshout media-sound/lame )
 	freeswitch_modules_spandsp? ( virtual/jpeg )
-	freeswitch_modules_radius_cdr? ( net-dialup/freeradius-client )
 	freeswitch_modules_redis? ( dev-db/redis )
-	freeswitch_modules_xml_curl? ( net-misc/curl )
-	freeswitch_modules_xml_ldap? ( net-nds/openldap )
+	freeswitch_modules_cdr_pg_csv? ( dev-db/postgresql )
+	freeswitch_modules_gsmopen? ( net-libs/ctb[-gpib] app-mobilephone/gsmlib )
 	freeswitch_modules_xml_ldap? ( net-nds/openldap[sasl] )
-	freeswitch_modules_yaml? ( >=dev-libs/libyaml-0.1.4 )
-
+	freeswitch_modules_ladspa? ( media-libs/ladspa-sdk )
 	freeswitch_modules_freetdm? (
-		freetdm_modules_libpri? ( >=net-libs/libpri-1.4.0 )
 		freetdm_modules_misdn? ( >=net-dialup/misdnuser-2.0.0 )
-		freetdm_modules_r2? ( net-misc/openr2 )
+		freetdm_modules_libpri? ( >=net-libs/libpri-1.4.0 )
+		freetdm_modules_wanpipe? ( net-misc/wanpipe )
 		freetdm_modules_sng_isdn? ( net-libs/libsng-isdn )
 		freetdm_modules_sng_ss7? ( net-libs/libsng-ss7 )
-		freetdm_modules_wanpipe? ( net-misc/wanpipe )
+		freetdm_modules_r2? ( net-misc/openr2 )
 	)
 "
 #	freeswitch_modules_mp4? ( media-libs/libmp4v2 )
@@ -181,17 +167,19 @@ DEPEND="${RDEPEND}
 	>=sys-devel/autoconf-2.60
 	>=sys-devel/automake-1.10
 	virtual/pkgconfig
-	net-libs/ldns
-	esl_java? ( >=virtual/jdk-1.5:* >=dev-lang/swig-2.0 )
-	esl_lua? ( >=dev-lang/swig-2.0 )
-	esl_managed? ( >=dev-lang/swig-2.0 )
-	esl_perl? ( >=dev-lang/swig-2.0 )
-	esl_python? ( >=dev-lang/swig-2.0 )
-	freeswitch_modules_java? ( >=virtual/jdk-1.5:* )
+	dev-lang/lua
+	sctp? ( kernel_linux? ( net-misc/lksctp-tools ) )
+	esl_java? ( >=dev-java/oracle-jdk-bin-1.8:* >=dev-lang/swig-1.3.6:1 )
+	esl_lua? ( dev-lang/lua >=dev-lang/swig-1.3.26:1 )
+	esl_managed? ( =dev-lang/swig-2*:0 )
+	esl_perl? ( >=dev-lang/swig-1.1:1 )
+	esl_python? ( >=dev-lang/swig-1.1:1 )
+	freeswitch_modules_java? ( >=dev-java/oracle-jdk-bin-1.8:* )
 "
 
 PDEPEND="media-sound/freeswitch-sounds
 	media-sound/freeswitch-sounds-music
+	freeswitch_modules_ssh? ( net-voip/freeswitch-mod_ssh )
 "
 
 for x in ${FM} ${FM_EXTERNAL}; do
@@ -204,7 +192,7 @@ for x in ${ESL}; do
 	IUSE="${IUSE} esl_${x}"
 done
 for x in ${LANGS}; do
-	IUSE="${IUSE} l10n_${x}"
+	IUSE="${IUSE} linguas_${x}"
 done
 for x in ${FM_BROKEN}; do
 	IUSE="${IUSE//${x}}"
@@ -243,7 +231,8 @@ pkg_setup() {
 		export SWIFT_HOME
 	fi
 
-	use freeswitch_modules_python || use esl_python && python-single-r1_pkg_setup
+	python_set_active_version 2
+	python_pkg_setup
 
 	enewgroup "${FREESWITCH_GROUP}"
 	enewuser "${FREESWITCH_USER}" -1 -1 "/var/lib/${PN}" "${FREESWITCH_GROUP}"
@@ -308,7 +297,7 @@ setup_modules() {
 		action="enable"
 
 		[ -n "${mod}" ] && {
-			use l10n_${mod} || action="disable"
+			use linguas_${mod} || action="disable"
 			fs_set_module "${action}" "mod_say_${mod}"
 		}
 	done
@@ -325,6 +314,20 @@ esl_modname() {
 		;;
 	esac
 	return 0
+}
+
+esl_dopymod() {
+	(
+		insinto $(python_get_sitedir)
+
+		for x in ${@}; do
+			insopts -m644
+
+			[ "${x}" != "${x%.so}" ] && insopts -m755
+
+			doins "${x}" || die "failed to install ${x}"
+		done
+	) || die "failed to install $@"
 }
 
 esl_doluamod() {
@@ -364,21 +367,27 @@ esl_doperlmod() {
 src_prepare() {
 	# disable -Werror
 	epatch "${FILESDIR}/${P}-no-werror.patch"
+
 	# Fix broken libtool?
 	sed -i "1i export to_tool_file_cmd=func_convert_file_noop" "${S}/libs/apr/Makefile.in"
 	sed -i "1i export to_tool_file_cmd=func_convert_file_noop" "${S}/libs/apr-util/Makefile.in"
 
-	# Change invocations of "swig2.0" to "swig"
-	local potentially_affected_makefiles=$(find "${S}/libs/esl/" "${S}/src/mod/languages/" -name "Makefile*")
-	for file in $potentially_affected_makefiles; do
-		sed -i "s/swig2.0/swig/" "${file}"
-	done
+	einfo
+	einfo "Adding AMD module"
+	einfo
+	cp -R "${FILESDIR}/AMD" "${S}/src/mod/applications/mod_amd"
+
 
 	if use freeswitch_modules_freetdm
 	then
 		( cd "${S}/libs/freetdm" ; ./bootstrap ; ) || die "Failed to bootstrap FreeTDM"
 	fi
 
+	if use esl_python; then
+		python_get_version &>/dev/null && PYVER=$(python_get_version) || die "Failed to determine current python version"
+		sed -i -e "/^LOCAL_/{ s:python-2\.[0-9]:python-${PYVER}:g; s:python2\.[0-9]:python${PYVER}:g }" \
+			libs/esl/python/Makefile || die "failed to change python locations in esl python module"
+	fi
 	epatch_user
 	eautoreconf
 }
@@ -393,6 +402,11 @@ src_configure() {
 		config_opts="--with-misdn"
 
 	use debug || config_opts="${config_opts} --disable-debug"
+
+	if use debug; then
+		export CFLAGS="-g -ggdb"
+		export MOD_CFLAGS="-g -ggdb"
+	fi
 
 	einfo "Configuring FreeSWITCH..."
 		touch noreg
@@ -410,12 +424,12 @@ src_configure() {
 		--with-htdocsdir="/usr/share/${PN}/htdocs" \
 		--with-soundsdir="/usr/share/${PN}/sounds" \
 		--with-grammardir="/usr/share/${PN}/grammar" \
-		--with-scriptdir="/var/lib/${PN}/scripts" \
+		--with-scriptdir="/usr/share/${PN}/scripts" \
 		--with-recordingsdir="/var/lib/${PN}/recordings" \
 		--with-pkgconfigdir="/usr/$(get_libdir)/pkgconfig" \
-		$(use_enable postgres core-pgsql-support) \
+		$(use_enable sctp) \
 		$(use_enable zrtp) \
-		$(use_with freeswitch_modules_python python "${PYTHON}") \
+		$(use_with freeswitch_modules_python python "$(PYTHON -a)") \
 		$(use_enable resampler resample) \
 		$(use_enable odbc core-odbc-support) \
 		${java_opts} ${config_opts} || die "failed to configure FreeSWITCH"
@@ -486,10 +500,7 @@ src_install() {
 
 	if use esl_python; then
 		einfo "Installing esl module for python..."
-		insinto $(python_get_sitedir)
-		insopts -m644
-		doins "libs/esl/python/_ESL.so"
-		python_domodule "libs/esl/python/ESL.py"
+		esl_dopymod libs/esl/python/{_ESL.so,ESL.py}
 	fi
 
 	if use esl_lua; then
@@ -529,6 +540,12 @@ src_install() {
 }
 
 pkg_postinst() {
+	einfo
+	elog "setting paxctl flags on binaries"
+	sh "${FILESDIR}"/pax_fix.sh
+	elog "pax flags have been set"
+	einfo
+
 	einfo
 	einfo "FreeSWITCH has been successfully emerged!"
 	einfo
