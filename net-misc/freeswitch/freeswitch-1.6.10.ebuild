@@ -33,7 +33,7 @@ FM_APPLICATIONS="
 	http_cache ladspa lcr +limit memcache mongo nibblebill
 	osp rad_auth random redis rss skel +sms snapshot
 	snom soundtouch +spandsp spy stress +valet_parking vmd
-	+voicemail voicemail_ivr amd
+	+voicemail voicemail_ivr
 "
 FM_TTS="
 	cepstral flite pocketsphinx tts_commandline unimrcp
@@ -371,12 +371,6 @@ src_prepare() {
 	# Fix broken libtool?
 	sed -i "1i export to_tool_file_cmd=func_convert_file_noop" "${S}/libs/apr/Makefile.in"
 	sed -i "1i export to_tool_file_cmd=func_convert_file_noop" "${S}/libs/apr-util/Makefile.in"
-
-	einfo
-	einfo "Adding AMD module"
-	einfo
-	cp -R "${FILESDIR}/AMD" "${S}/src/mod/applications/mod_amd"
-
 
 	if use freeswitch_modules_freetdm
 	then
