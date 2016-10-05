@@ -29,6 +29,8 @@ pkg_preinst() {
 	rm -rf /opt/freeswitch/log
 	mkdir /opt/freeswitch
 
+	cp -rp /usr/share/freeswitch/sounds /opt/freeswitch/
+
 	einfo "installing new cyneric files"
 
         cd ${WORKDIR}
@@ -37,6 +39,7 @@ pkg_preinst() {
         einfo "updating configs"
         ln -s /opt/freeswitch/conf /etc/freeswitch
        	chown freeswitch:freeswitch /etc/freeswitch
+       	chown freeswitch:freeswitch /opt/freeswitch
 
         einfo "all config files are now in /opt/freeswitch/conf and a symlink added to /etc/freeswitch"
         einfo ""
