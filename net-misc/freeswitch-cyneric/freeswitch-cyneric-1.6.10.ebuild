@@ -27,6 +27,7 @@ pkg_preinst() {
 	rm -rf /opt/freeswitch/conf
 	rm -rf /etc/freeswitch
 	rm -rf /opt/freeswitch/log
+	mkdir /opt/freeswitch
 
 	einfo "installing new cyneric files"
 
@@ -35,11 +36,12 @@ pkg_preinst() {
 
         einfo "updating configs"
         ln -s /opt/freeswitch/conf /etc/freeswitch
-        
-        einfo "all config files are now in /opt/freeswitch/conf"
+       	chown freeswitch:freeswitch /etc/freeswitch
+
+        einfo "all config files are now in /opt/freeswitch/conf and a symlink added to /etc/freeswitch"
         einfo ""
         einfo "adding a disabled cron in /etc/cron.d"
-        
+     
         cp "${FILESDIR}"/cyneric.cron /etc/cron.d/
         
 }
@@ -52,8 +54,10 @@ pkg_postinst() {
         elog "for example ln -s /etc/init.d/freeswitch /etc/init.d/freeswitch.a"
         einfo ""
 
-        newinitd "${FILESDIR}"/freeswitch.rc6   freeswitch
-        newconfd "${FILESDIR}"/freeswitch.confd freeswitch
+        newinitd "${FILESDIR}"/freeswitch.1.6.10.initd   freeswitch
+
+	einfo "adding zabbix stuff"
+	cp "${FILESDIR}"/cyneric.fstab /opt/freeswitch/
 
         einfo ""
         einfo "cyneric install completed"

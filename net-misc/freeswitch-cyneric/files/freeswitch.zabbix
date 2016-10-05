@@ -1,1 +1,0 @@
-UserParameter=freeswitch[*],sudo -u zabbix sudo /opt/agents/zabbix-freeswitch.pl \$1 \$2

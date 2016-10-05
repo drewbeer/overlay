@@ -5,9 +5,6 @@
 # disk space
 #01,05,10,15,20,25,30,35,40,45,50,55 * * * *  root /opt/freeswitch/scripts/freeswitch.df.pl > /dev/null 2>&1
 
-# crontab sync
-#* *    * * *    root    /usr/bin/screen -d -m -S crontab_sync /usr/bin/ionice -c3 /usr/bin/nice -n 19 /usr/local/sbin/crontab_sync.php > /dev/null 2>&1
-
 # delete old log files
 #10 1   * * *   root    find /opt/freeswitch/log/a/comprimidos  -type f -name "*.tar.gz*" -mtime +2 -exec rm {} \; 2>/dev/null
 #10 1   * * *   root    find /opt/freeswitch/log/b/comprimidos  -type f -name "*.tar.gz*" -mtime +2 -exec rm {} \; 2>/dev/null
