@@ -58,6 +58,7 @@ start() {
 		-nc ${OPTS}
 	eend $?
 
+        ebegin "Starting cynerwebmon.sh"
 	sleep 3
 
 	# start freeswitch mon
