@@ -41,6 +41,9 @@ pkg_preinst() {
        	chown freeswitch:freeswitch /etc/freeswitch
        	chown freeswitch:freeswitch /opt/freeswitch
 
+
+	ln -s /opt/freeswitch/scripts/fscli.sh /usr/local/sbin/fscli
+
         einfo "all config files are now in /opt/freeswitch/conf and a symlink added to /etc/freeswitch"
         einfo ""
         einfo "adding a disabled cron in /etc/cron.d"
