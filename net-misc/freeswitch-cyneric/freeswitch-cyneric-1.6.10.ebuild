@@ -57,7 +57,7 @@ pkg_postinst() {
         elog "for example ln -s /etc/init.d/freeswitch /etc/init.d/freeswitch.a"
         einfo ""
 
-        newinitd "${FILESDIR}"/freeswitch.1.6.10.initd   freeswitch
+        cp "${FILESDIR}"/freeswitch.1.6.10.initd   /etc/init.d/freeswitch
 
 	einfo "adding zabbix stuff"
 	cp "${FILESDIR}"/cyneric.fstab /opt/freeswitch/
