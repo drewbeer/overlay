@@ -330,6 +330,11 @@ src_install () {
 		share_dir="/usr/share/${flavour}/" \
 		data_dir="/usr/share/${flavour}/" \
                 install || die
+
+
+        newinitd ${FILESDIR}/"${PN}".initd "${PN}"
+        newconfd ${FILESDIR}/"${PN}".confd "${PN}"
+
 }
 
 pkg_preinst() {
@@ -341,10 +346,6 @@ pkg_preinst() {
         chown -R root:${PN}  ${D}/etc/${PN}
         chmod -R u=rwX,g=rX,o= ${D}/etc/${PN}
 
-	systemd_dounit "${FILESDIR}/${PN}.service"
-
-        insinto /etc/default
-        newins "${FILESDIR}/${PN}.default" ${PN}
 }
 
 pkg_postinst() {
