@@ -1,0 +1,19 @@
+# Copyright 1999-2012 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+# Additional options to start Kamailio with.
+#
+# see "sip-router -h" for a list of options
+#
+# default: run Kamailio as user:group = kamailio:kamailio
+#
+
+SHM_MEMORY=64
+PKG_MEMORY=8
+MAIN_NAME="kamailio"
+USER="kamailio"
+GROUP="kamailio"
+CONFIGFILE="${CONFIGFILE:-/etc/${MAIN_NAME}/kamailio.cfg}"
+CONFIGDEFS="" # eg: "-A WITH_DEBUG -A WITH_NAT -A WITH_TLS"
+OPTS="-u $USER -g $GROUP -f ${CONFIGFILE} -m $SHM_MEMORY -M $PKG_MEMORY ${CONFIGDEFS}"
