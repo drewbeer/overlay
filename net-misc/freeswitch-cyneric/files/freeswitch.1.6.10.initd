@@ -71,7 +71,7 @@ stop() {
 
 	ebegin "Stopping Freeswitch instance ${INSTANCE}"
 	start-stop-daemon --stop \
-		--signal SIGILL \
+		--signal SIGKILL \
 		--retry 5 --quiet \
 		--pidfile /opt/freeswitch/log/${INSTANCE}/freeswitch.pid
         eend $?
