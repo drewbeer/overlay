@@ -63,8 +63,8 @@ start() {
 	sleep 3
 
 	# start freeswitch mon
-	killall -9 cynerwebmon.sh
-	flock -n /var/run/cynerwebmon.lockfile -c /opt/freeswitch/scripts/cynerwebmon.sh
+	killall -9 cynerwebmon.sh > /dev/null 2>&1
+	flock -n /var/run/cynerwebmon.lockfile -c /opt/freeswitch/scripts/cynerwebmon.sh > /dev/null 2>&1
 
 }
 
