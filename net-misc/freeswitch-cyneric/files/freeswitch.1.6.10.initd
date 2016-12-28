@@ -58,12 +58,13 @@ start() {
 		-nc ${OPTS}
 	eend $?
 
-        ebegin "Starting cynerwebmon.sh"
+	ebegin "Starting cynerwebmon.sh"
+
 	sleep 3
 
 	# start freeswitch mon
-	kill -9 $(pidof -x cynerwebmon.sh)
-	/opt/freeswitch/scripts/cynerwebmon.sh
+	killall -9 cynerwebmon.sh
+	flock -n /var/run/cynerwebmon.lockfile -c /opt/freeswitch/scripts/cynerwebmon.sh
 
 }
 
