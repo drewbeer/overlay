@@ -40,10 +40,10 @@ janus_run_loop() {
 
         echo "Initializing $(janus_svcname) wrapper"
         
-        trap "rm -f '/var/run/janus_wrapper_loop.running'" EXIT
-        touch "/var/run/janus_wrapper_loop.running"
+        trap "rm -f '/var/run/janus_wrapper_loop.running.${SVCNAME}'" EXIT
+        touch "/var/run/janus_wrapper_loop.running.${SVCNAME}"
 
-        while [ -r "/var/run/janus_wrapper_loop.running" ]; do
+        while [ -r "/var/run/janus_wrapper_loop.running.${SVCNAME}" ]; do
 
 	        export G_MESSAGES_DEBUG=false
 	        export NICE_DEBUG=false
@@ -143,17 +143,17 @@ start() {
 
 wrapperstop() {
         # Accomodate system upgrades (so a previous version of the wrapper script that still uses a pid file may be running).
-        if [ -r "/var/run/janus_wrapper_loop.pid" ]; then
+        if [ -r "/var/run/janus_wrapper_loop.${SVCNAME}.pid" ]; then
                 ebegin "Killing janus wrapper script"
-                kill "$(cat /var/run/janus_wrapper_loop.pid)"
+                kill "$(cat /var/run/janus_wrapper_loop.${SVCNAME}.pid)"
                 eend $?
         fi
 
         # The new one (due to "hardened" requirements) uses a simpler
         # flag to indicate running or shutting down.
-        if [ -r "/var/run/janus_wrapper_loop.running" ]; then
+        if [ -r "/var/run/janus_wrapper_loop.running.${SVCNAME}" ]; then
                 ebegin "Signalling wrapper script to terminate"
-                rm "/var/run/janus_wrapper_loop.running"
+                rm "/var/run/janus_wrapper_loop.running.${SVCNAME}"
                 eend $?
         fi
 
