@@ -50,7 +50,7 @@ janus_run_loop() {
 
 	        JANUS_CNF_PATH="${JANUS_CNF_PATH:-/etc/${SVCNAME}}"
 
-		cd /etc/janus
+		cd /etc/${SVCNAME}}
 
 		/usr/bin/janus -F${JANUS_CNF_PATH} ${JANUS_OPTS} -N -L /var/log/janus.log -p ${pid_file}
 		result=$?
