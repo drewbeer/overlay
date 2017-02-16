@@ -1,0 +1,30 @@
+#!/sbin/runscript
+# Copyright 1999-2015 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+depend() {
+
+	need net
+
+}
+
+start() {
+
+       checkpath --directory --owner maxscale /run/maxscale
+       checkpath --directory --owner maxscale /var/log/maxscale	
+
+       ebegin "Starting Maxscale"
+       start-stop-daemon --start --pidfile ${MAXSCALE_PIDFILE} --user ${MAXSCALE_USER} \
+       --name maxscale ${MAXSCALE_DAEMON}
+       eend $?
+
+}
+
+stop() {
+
+      ebegin "Stoping Maxscale"
+      start-stop-daemon --stop --pidfile ${MAXSCALE_PIDFILE} --name maxscale
+      eend $?
+
+}
