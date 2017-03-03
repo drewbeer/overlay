@@ -31,7 +31,7 @@ DEPEND="docs? ( app-doc/doxygen media-gfx/graphviz )
 	dev-libs/jansson
 	net-libs/libnice[-upnp]
 	dev-libs/openssl
-	>=net-libs/libsrtp-2.0.0
+	>=net-libs/libsrtp-2.0.0[openssl]
 	net-libs/sofia-sip
 	dev-libs/glib
 	app-misc/screen
