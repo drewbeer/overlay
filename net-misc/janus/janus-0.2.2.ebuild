@@ -31,12 +31,15 @@ DEPEND="docs? ( app-doc/doxygen media-gfx/graphviz )
 	dev-libs/jansson
 	net-libs/libnice[-upnp]
 	dev-libs/openssl
-	>=net-libs/libsrtp-2.0.0[openssl]
+	>=net-libs/libsrtp-2.0.0
 	net-libs/sofia-sip
 	dev-libs/glib
 	app-misc/screen
 	dev-util/gengetopt
 	dev-libs/ding-libs"
+
+#	>=net-libs/libsrtp-2.0.0[openssl]
+
 
 S="${WORKDIR}/janus-gateway"
 
