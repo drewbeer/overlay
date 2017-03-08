@@ -1,0 +1,44 @@
+diff -ur MaxScale-maxscale-2.0.0.orig/CMakeLists.txt MaxScale-maxscale-2.0.0/CMakeLists.txt
+--- MaxScale-maxscale-2.0.0.orig/CMakeLists.txt	2016-08-11 11:44:07.000000000 +0200
++++ MaxScale-maxscale-2.0.0/CMakeLists.txt	2016-08-19 13:54:09.271449911 +0200
+@@ -10,9 +10,7 @@
+ enable_testing()
+ 
+ # Packaging builds install to /usr and other builds to /usr/local
+-if(PACKAGE)
+-  set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Prefix prepended to install directories.")
+-endif()
++set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Prefix prepended to install directories.")
+ 
+ # Set default values for cache entries and set the MaxScale version
+ include(cmake/defaults.cmake)
+@@ -96,7 +94,7 @@
+   set(MAXSCALE_COMMIT "source-build")
+ endif()
+ 
+-set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_RPATH}:${CMAKE_INSTALL_PREFIX}/${MAXSCALE_LIBDIR})
++set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/${MAXSCALE_LIBDIR})
+ 
+ # Make sure the release notes for this release are present if it is a stable one
+ if(${MAXSCALE_VERSION} MATCHES "-stable")
+@@ -116,7 +114,7 @@
+ configure_file(${CMAKE_SOURCE_DIR}/etc/postrm.in ${CMAKE_BINARY_DIR}/postrm @ONLY)
+ configure_file(${CMAKE_SOURCE_DIR}/server/test/maxscale_test.cnf ${CMAKE_BINARY_DIR}/maxscale.cnf @ONLY)
+ 
+-set(FLAGS "-Wall -Wno-unused-variable -Wno-unused-function -Werror -fPIC" CACHE STRING "Compilation flags")
++set(FLAGS "-Wall -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function -Werror -fPIC" CACHE STRING "Compilation flags")
+ set(DEBUG_FLAGS "-ggdb -pthread -pipe -Wformat -fstack-protector --param=ssp-buffer-size=4" CACHE STRING "Debug compilation flags")
+ 
+ if(CMAKE_VERSION VERSION_GREATER 2.6)
+diff -ur MaxScale-maxscale-2.0.0.orig/server/core/CMakeLists.txt MaxScale-maxscale-2.0.0/server/core/CMakeLists.txt
+--- MaxScale-maxscale-2.0.0.orig/server/core/CMakeLists.txt	2016-08-11 11:44:07.000000000 +0200
++++ MaxScale-maxscale-2.0.0/server/core/CMakeLists.txt	2016-08-19 13:23:25.691415482 +0200
+@@ -8,6 +8,8 @@
+   target_link_libraries(maxscale-common ${TCMALLOC_LIBRARIES})
+ endif()
+ 
++SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
++
+ add_dependencies(maxscale-common pcre2 connector-c)
+ install(TARGETS maxscale-common DESTINATION ${MAXSCALE_LIBDIR})
+ set_target_properties(maxscale-common PROPERTIES VERSION "1.0.0")

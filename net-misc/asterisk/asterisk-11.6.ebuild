@@ -83,7 +83,7 @@ PDEPEND="net-misc/asterisk-core-sounds
 	net-misc/asterisk-extra-sounds
 	net-misc/asterisk-moh-opsound"
 
-S="${WORKDIR}/${MY_P}"
+S="${WORKDIR}/asterisk-certified-11.6-cert16"
 
 pkg_setup() {
 	CONFIG_CHECK="~!NF_CONNTRACK_SIP"
