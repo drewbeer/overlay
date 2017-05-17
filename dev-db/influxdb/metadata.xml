@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>nico@overninethousand.de</email>
+	</maintainer>
+	<longdescription lang="en">
+		InfluxDB is an open-source distributed time series database with no
+		external dependencies. It's useful for recording metrics, events, and
+		performing analytics.
+	</longdescription>
+</pkgmetadata>
