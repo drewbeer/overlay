@@ -1,11 +1,9 @@
-#!/sbin/runscript
-# Copyright 1999-2007 Gentoo Foundation
-# Distributed under the terms of the GNU General Public License v2
-# $Header: $
+#!/sbin/openrc-run
 
-PID_FILE="/var/run/unifi.pid"
-DAEMON="${JAVA_HOME-/usr}"/bin/java
-UNIFI_PATH="/usr/lib/unifi"
+PID="/run/unifi.pid"
+UNIFI_PATH="/opt/UniFi"
+PARAM='-server -jar lib/ace.jar'
+java=java
 
 depend() {
     need net
@@ -13,16 +11,29 @@ depend() {
 
 start() {
 	ebegin "Starting unifi"
-	cd "${UNIFI_PATH}"
-	start-stop-daemon --start --quiet -b \
-	--pidfile "${PID_FILE}" -m \
-	--exec ${DAEMON} -- -jar lib/ace.jar start
+	cd "${UNIFI_PATH}" || eend 1 || return 1
+	[ -e data/db/mongod.lock ] && {
+		mongod --repair --upgrade --dbpath data/db || {
+			eend 1
+			return 1
+		}
+	}
+	start-stop-daemon --start --quiet --background --pidfile "${PID}" --make-pidfile --exec $java -- $PARAM start
 	eend $?
-	#--user nobody --group nobody \
 }
 
 stop() {
 	ebegin "Stopping unifi"
-	start-stop-daemon --quiet --stop -R 20 --pidfile "${PID_FILE}"
+	cd "${UNIFI_PATH}" || eend 1 || return 1
+	$java $PARAM stop
+	for i in $(seq 0 60); do
+		pgrep $java -F $PID >/dev/null || {
+			eend 0
+			return 0
+		}
+		echo -n .
+		sleep 1
+	done
+	start-stop-daemon --quiet --stop -R 20 --pidfile "${PID}" --exec $java -- $PARAM start
 	eend $?
 }
