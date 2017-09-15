@@ -1,0 +1,31 @@
+#!/sbin/openrc-run
+# Copyright 1999-2017 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Id$
+
+depend() {
+	need net
+	after bootmisc
+}
+
+start() {
+    ebegin "Starting telegraf"
+
+    start-stop-daemon --start -b \
+    --user ${TELEGRAF_USER}:${TELEGRAF_GROUP} \
+    --pidfile /run/telegraf.pid \
+    --make-pidfile \
+    --stdout /var/log/telegraf/telegraf.log \
+    --stderr /var/log/telegraf/telegraf.log \
+    --exec /usr/bin/telegraf
+    eend $?
+}
+
+stop() {
+    ebegin "Stopping telegraf"
+
+    start-stop-daemon --stop \
+    --pidfile /run/telegraf.pid \
+    --exec /usr/bin/telegraf
+    eend $?
+}

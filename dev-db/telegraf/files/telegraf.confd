@@ -1,0 +1,4 @@
+# Config file for /etc/init.d/telegraf
+
+TELEGRAF_USER=telegraf
+TELEGRAF_GROUP=telegraf
