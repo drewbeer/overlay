@@ -17,7 +17,7 @@ start() {
     --make-pidfile \
     --stdout /var/log/telegraf/telegraf.log \
     --stderr /var/log/telegraf/telegraf.log \
-    --exec /usr/bin/telegraf
+    --exec /usr/bin/telegraf -- ${TELEGRAF_OPTS}
     eend $?
 }
 
