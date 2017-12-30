@@ -1,0 +1,13 @@
+diff -ur work/usr/sbin/unifi-video work.new/usr/sbin/unifi-video
+--- work/usr/sbin/unifi-video	2017-09-18 15:11:21.000000000 -0500
++++ work.new/usr/sbin/unifi-video	2017-09-21 19:16:04.448434233 -0500
+@@ -271,7 +271,7 @@
+ JSVC_OPTS="${JSVC_OPTS} \
+  -user ${PKGUSER} \
+  -home ${JAVA_HOME} \
+- -cp /usr/share/java/commons-daemon.jar:${MAINJAR} \
++ -cp /usr/share/commons-daemon/lib/commons-daemon.jar:${MAINJAR} \
+  -pidfile ${PIDFILE} \
+  -procname ${NAME} \
+  ${JSVC_EXTRA_OPTS} \
+
